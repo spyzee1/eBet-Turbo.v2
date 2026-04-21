@@ -1,0 +1,611 @@
+import { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
+
+interface CheckedMatch {
+  matchId: string;
+  tip: {
+    time: string;
+    date: string;
+    playerA: string;
+    playerB: string;
+    vartGol: number;
+    ouLine: number;
+    oddsOver?: number;
+    oddsUnder?: number;
+  };
+  timestamp: number;
+  date: string; // YYYY-MM-DD formátum
+  betType?: 'Over' | 'Under';
+  betLine?: number;
+  result?: 'Win' | 'Loss';
+  stake?: number; // Tét összege
+  odds?: number; // ✅ ÚJ: Odds mező
+}
+
+interface DayGroup {
+  date: string;
+  matches: CheckedMatch[];
+}
+
+const BETTING_JOURNAL_KEY = 'betting_journal'; // ← PERMANENT napló kulcs
+const DEFAULT_STAKE = 1000; // Alapértelmezett tét: 1000 Ft
+
+export default function Naplo() {
+  const [matches, setMatches] = useState<CheckedMatch[]>([]);
+  const [dayGroups, setDayGroups] = useState<DayGroup[]>([]);
+  const [defaultStake, setDefaultStake] = useState(DEFAULT_STAKE);
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
+
+  // localStorage betöltés - PERMANENT napló + EGYSZERI MIGRÁCIÓ
+  useEffect(() => {
+    try {
+      let stored = localStorage.getItem(BETTING_JOURNAL_KEY);
+      
+      // ✅ EGYSZERI MIGRÁCIÓ: Régi meccsek átmásolása
+      if (!stored) {
+        console.log('🔄 MIGRÁCIÓ: Régi meccsek átmásolása...');
+        const oldMatches = localStorage.getItem('checked_green_matches');
+        if (oldMatches) {
+          localStorage.setItem(BETTING_JOURNAL_KEY, oldMatches);
+          stored = oldMatches;
+          console.log('✅ MIGRÁCIÓ sikeres!');
+        }
+      }
+      
+      if (!stored) {
+        setMatches([]);
+        return;
+      }
+      
+      const parsed = JSON.parse(stored);
+      if (!Array.isArray(parsed)) {
+        setMatches([]);
+        return;
+      }
+
+      const validMatches = parsed.filter((item: any) => 
+        item && 
+        typeof item === 'object' && 
+        item.matchId && 
+        item.tip && 
+        typeof item.tip === 'object'
+      );
+
+      // ✅ TIMESTAMP REPAIR: NULL értékek javítása
+      const repairedMatches = validMatches.map((m: any) => {
+        if (!m.timestamp || m.timestamp === null) {
+          console.warn(`⚠️ Timestamp hiányzik: ${m.tip.playerA} vs ${m.tip.playerB}`);
+          
+          // Dátum rekonstrukció
+          const today = new Date();
+          const year = today.getFullYear();
+          const dateStr = m.date || m.tip.date || '01/01';
+          const timeStr = m.tip.time || '00:00';
+          
+          // MM/DD → YYYY-MM-DD
+          let fullDate: string;
+          if (dateStr.includes('-')) {
+            fullDate = dateStr; // Már YYYY-MM-DD
+          } else if (dateStr.includes('/')) {
+            const [month, day] = dateStr.split('/');
+            fullDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+          } else {
+            fullDate = `${year}-01-01`;
+          }
+          
+          const repaired = new Date(`${fullDate}T${timeStr}`).getTime();
+          console.log(`  ✅ Javítva: ${new Date(repaired).toLocaleString('hu-HU')}`);
+          
+          return { ...m, timestamp: repaired, date: fullDate };
+        }
+        return m;
+      });
+
+      // localStorage-ba visszamentés javított értékekkel
+      try {
+        localStorage.setItem(BETTING_JOURNAL_KEY, JSON.stringify(repairedMatches));
+      } catch (e) {
+        console.error('Javított adatok mentési hiba:', e);
+      }
+
+      // DEBUG: Nézd meg a timestamp-eket
+      console.log('📊 NAPLÓ DEBUG - Összes meccs timestamp:');
+      repairedMatches.forEach(m => {
+        const date = new Date(m.timestamp);
+        console.log(`  ${m.tip.playerA} vs ${m.tip.playerB} | ${date.toISOString()} | ${date.toLocaleDateString('hu-HU')}`);
+      });
+
+      // Utolsó 30 nap szűrés
+      const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+      const recentMatches = repairedMatches.filter(m => m.timestamp >= thirtyDaysAgo);
+
+      console.log(`✅ Összes: ${repairedMatches.length}, Utolsó 30 nap: ${recentMatches.length}`);
+
+      setMatches(recentMatches);
+    } catch (e) {
+      console.error('Hiba a napló betöltésekor:', e);
+      setMatches([]);
+    }
+  }, []);
+
+  // ✅ EVENT LISTENER - TopTips változások figyelése
+  useEffect(() => {
+    const handleJournalUpdate = () => {
+      console.log('🔄 Napló frissítés...');
+      try {
+        const stored = localStorage.getItem(BETTING_JOURNAL_KEY);
+        if (!stored) {
+          setMatches([]);
+          return;
+        }
+        
+        const parsed = JSON.parse(stored);
+        if (!Array.isArray(parsed)) {
+          setMatches([]);
+          return;
+        }
+
+        const validMatches = parsed.filter((item: any) => 
+          item && 
+          typeof item === 'object' && 
+          item.matchId && 
+          item.tip && 
+          typeof item.tip === 'object'
+        );
+
+        const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+        const recentMatches = validMatches.filter(m => m.timestamp >= thirtyDaysAgo);
+        
+        setMatches(recentMatches);
+        console.log('✅ Napló frissítve!', recentMatches.length, 'meccs');
+      } catch (e) {
+        console.error('Napló frissítési hiba:', e);
+      }
+    };
+
+    window.addEventListener('journal-updated', handleJournalUpdate);
+    return () => window.removeEventListener('journal-updated', handleJournalUpdate);
+  }, []);
+
+  // Dátum szerinti csoportosítás
+  useEffect(() => {
+    const grouped: Record<string, CheckedMatch[]> = {};
+
+    matches.forEach(match => {
+      // date mező használata (ha nincs, fallback timestamp-ből)
+      const date = match.date || new Date(match.timestamp).toISOString().split('T')[0];
+      
+      if (!grouped[date]) {
+        grouped[date] = [];
+      }
+      grouped[date].push(match);
+    });
+
+    const groups: DayGroup[] = Object.keys(grouped)
+      .sort((a, b) => b.localeCompare(a)) // Legfrissebb elől (2026-04-17 > 2026-04-16)
+      .map(date => ({
+        date,
+        matches: grouped[date].sort((a, b) => a.timestamp - b.timestamp) // Időrendi sorrend TIMESTAMP szerint!
+      }));
+
+    setDayGroups(groups);
+  }, [matches]);
+
+  // Napló entry törlése
+  const deleteEntry = (matchId: string) => {
+    setMatches(prev => {
+      const updated = prev.filter(m => m.matchId !== matchId);
+      try {
+        const journal = JSON.parse(localStorage.getItem(BETTING_JOURNAL_KEY) || '[]');
+        const filtered = journal.filter((m: any) => m.matchId !== matchId);
+        localStorage.setItem(BETTING_JOURNAL_KEY, JSON.stringify(filtered));
+      } catch (e) {
+        console.error('Napló törlési hiba:', e);
+      }
+      return updated;
+    });
+  };
+
+  // Napló entry frissítése — syncs both journal and Megtett meccsek
+  const updateEntry = (matchId: string, field: string, value: any) => {
+    setMatches(prev => {
+      const updated = prev.map(m => m.matchId === matchId ? { ...m, [field]: value } : m);
+      try {
+        const journal = JSON.parse(localStorage.getItem(BETTING_JOURNAL_KEY) || '[]');
+        const idx = journal.findIndex((m: any) => m.matchId === matchId);
+        if (idx !== -1) {
+          journal[idx] = { ...journal[idx], [field]: value };
+          localStorage.setItem(BETTING_JOURNAL_KEY, JSON.stringify(journal));
+        }
+        // Also sync back to the Megtett meccsek (CHECKED_GREEN_KEY) so TopTips updates
+        const GREEN_KEY = 'checked_green_matches';
+        const greenRaw = localStorage.getItem(GREEN_KEY);
+        if (greenRaw) {
+          const green = JSON.parse(greenRaw);
+          const gi = green.findIndex((m: any) => m.matchId === matchId);
+          if (gi !== -1) {
+            green[gi] = { ...green[gi], [field]: value };
+            localStorage.setItem(GREEN_KEY, JSON.stringify(green));
+            window.dispatchEvent(new Event('checked-matches-updated'));
+          }
+        }
+      } catch (e) {
+        console.error('Napló frissítési hiba:', e);
+      }
+      return updated;
+    });
+  };
+
+  // ROI számítás
+  const calculateROI = () => {
+    let totalStake = 0;
+    let totalProfit = 0;
+
+    matches.forEach(match => {
+      if (!match.result || !match.betType || !match.betLine) return;
+
+      const stake = match.stake || defaultStake;
+      totalStake += stake;
+
+      if (match.result === 'Win') {
+        // ✅ ÚJ: Előnyben a match.odds mező
+        const odds = match.odds || (match.betType === 'Over' 
+          ? (match.tip.oddsOver || 2.0) 
+          : (match.tip.oddsUnder || 2.0));
+        const profit = (odds - 1) * stake;
+        totalProfit += profit;
+      } else {
+        totalProfit -= stake;
+      }
+    });
+
+    const roi = totalStake > 0 ? (totalProfit / totalStake) * 100 : 0;
+    return { totalStake, totalProfit, roi };
+  };
+
+  // Statisztikák
+  const getStats = () => {
+    const completed = matches.filter(m => m.result);
+    const wins = completed.filter(m => m.result === 'Win').length;
+    const losses = completed.filter(m => m.result === 'Loss').length;
+    const winRate = completed.length > 0 ? (wins / completed.length) * 100 : 0;
+
+    const overs = completed.filter(m => m.betType === 'Over').length;
+    const unders = completed.filter(m => m.betType === 'Under').length;
+
+    return { total: matches.length, completed: completed.length, wins, losses, winRate, overs, unders };
+  };
+
+  // Nap toggle
+  const toggleDay = (date: string) => {
+    setExpandedDays(prev => {
+      const next = new Set(prev);
+      if (next.has(date)) {
+        next.delete(date);
+      } else {
+        next.add(date);
+      }
+      return next;
+    });
+  };
+
+  // Napi statisztikák számítása
+  const getDayStats = (dayMatches: CheckedMatch[]) => {
+    const completed = dayMatches.filter(m => m.result);
+    const wins = completed.filter(m => m.result === 'Win').length;
+    const losses = completed.filter(m => m.result === 'Loss').length;
+
+    let totalStake = 0;
+    let totalProfit = 0;
+
+    completed.forEach(match => {
+      const stake = match.stake || defaultStake;
+      totalStake += stake;
+
+      if (match.result === 'Win') {
+        const odds = match.odds || (match.betType === 'Over'
+          ? (match.tip.oddsOver || 2.0)
+          : (match.tip.oddsUnder || 2.0));
+        totalProfit += (odds - 1) * stake;
+      } else {
+        totalProfit -= stake;
+      }
+    });
+
+    return { wins, losses, profit: totalProfit };
+  };
+
+  // Excel export
+  const exportToExcel = () => {
+    const data = matches.map(match => ({
+      'Dátum': match.tip.date || new Date(match.timestamp).toLocaleDateString('hu-HU'),
+      'Időpont': match.tip.time,
+      'Meccs': `${match.tip.playerA} vs ${match.tip.playerB}`,
+      'Várható gól': match.tip.vartGol.toFixed(1),
+      'O/U vonal': match.tip.ouLine,
+      'Fogadás típusa': match.betType || '-',
+      'Fogadott vonal': match.betLine || '-',
+      'Tét (Ft)': match.stake || defaultStake,
+      'Eredmény': match.result || '-',
+      'Odds': match.betType === 'Over' 
+        ? (match.tip.oddsOver || '-') 
+        : match.betType === 'Under' 
+          ? (match.tip.oddsUnder || '-') 
+          : '-'
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Napló');
+
+    const { totalStake, totalProfit, roi } = calculateROI();
+    const stats = getStats();
+
+    // Statisztika hozzáadása
+    const statsData = [
+      { 'Statisztika': 'Összes meccs', 'Érték': stats.total },
+      { 'Statisztika': 'Befejezett', 'Érték': stats.completed },
+      { 'Statisztika': 'Nyerések', 'Érték': stats.wins },
+      { 'Statisztika': 'Vesztések', 'Érték': stats.losses },
+      { 'Statisztika': 'Win Rate (%)', 'Érték': stats.winRate.toFixed(1) },
+      { 'Statisztika': 'Összes tét (Ft)', 'Érték': totalStake },
+      { 'Statisztika': 'Nyereség (Ft)', 'Érték': totalProfit.toFixed(0) },
+      { 'Statisztika': 'ROI (%)', 'Érték': roi.toFixed(2) },
+    ];
+
+    const statsWs = XLSX.utils.json_to_sheet(statsData);
+    XLSX.utils.book_append_sheet(wb, statsWs, 'Statisztika');
+
+    XLSX.writeFile(wb, `Naplo_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const { totalStake, totalProfit, roi } = calculateROI();
+  const stats = getStats();
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">📖 Napló</h1>
+          <p className="text-sm text-slate-400 mt-1">Utolsó 30 nap megtett meccsek</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-slate-400">Alapértelmezett tét:</label>
+            <input
+              type="number"
+              value={defaultStake}
+              onChange={e => setDefaultStake(parseInt(e.target.value) || DEFAULT_STAKE)}
+              className="bg-dark-bg border border-dark-border rounded px-3 py-1.5 text-sm text-white w-32 focus:outline-none focus:border-accent"
+            />
+            <span className="text-xs text-slate-400">Ft</span>
+          </div>
+          <button
+            onClick={exportToExcel}
+            className="bg-green/20 text-green hover:bg-green/30 text-sm font-semibold px-4 py-2 rounded-lg cursor-pointer flex items-center gap-2"
+          >
+            📊 Excel export
+          </button>
+        </div>
+      </div>
+
+      {/* Statisztika kártyák */}
+      <div className="grid grid-cols-4 gap-4">
+        <div className="bg-dark-card border border-dark-border rounded-xl p-4">
+          <p className="text-xs text-slate-400 mb-1">Összes meccs</p>
+          <p className="text-2xl font-bold text-white">{stats.total}</p>
+          <p className="text-xs text-slate-500 mt-1">{stats.completed} befejezett</p>
+        </div>
+
+        <div className="bg-dark-card border border-dark-border rounded-xl p-4">
+          <p className="text-xs text-slate-400 mb-1">Win Rate</p>
+          <p className="text-2xl font-bold text-green">{stats.winRate.toFixed(1)}%</p>
+          <p className="text-xs text-slate-500 mt-1">{stats.wins}W / {stats.losses}L</p>
+        </div>
+
+        <div className="bg-dark-card border border-dark-border rounded-xl p-4">
+          <p className="text-xs text-slate-400 mb-1">Nyereség</p>
+          <p className={`text-2xl font-bold ${totalProfit >= 0 ? 'text-green' : 'text-red'}`}>
+            {totalProfit >= 0 ? '+' : ''}{totalProfit.toFixed(0)} Ft
+          </p>
+          <p className="text-xs text-slate-500 mt-1">Tét: {totalStake.toFixed(0)} Ft</p>
+        </div>
+
+        <div className="bg-dark-card border border-dark-border rounded-xl p-4">
+          <p className="text-xs text-slate-400 mb-1">ROI</p>
+          <p className={`text-2xl font-bold ${roi >= 0 ? 'text-green' : 'text-red'}`}>
+            {roi >= 0 ? '+' : ''}{roi.toFixed(2)}%
+          </p>
+          <p className="text-xs text-slate-500 mt-1">{stats.overs}O / {stats.unders}U</p>
+        </div>
+      </div>
+
+      {/* Napló lista */}
+      {dayGroups.length === 0 ? (
+        <div className="bg-dark-card border border-dark-border rounded-xl p-8 text-center">
+          <p className="text-slate-400">Nincs még megtett meccs az utolsó 30 napban</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {dayGroups.map(group => {
+            const isExpanded = expandedDays.has(group.date);
+            const dayStats = getDayStats(group.matches);
+
+            return (
+              <div key={group.date} className="bg-dark-card border border-dark-border rounded-xl overflow-hidden">
+                {/* Nap fejléc - kattintható */}
+                <button
+                  onClick={() => toggleDay(group.date)}
+                  className="w-full px-5 py-4 flex items-center justify-between hover:bg-dark-bg/40 transition cursor-pointer"
+                >
+                  <div className="flex items-center gap-4">
+                    {/* Chevron ikon */}
+                    <svg 
+                      className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                      fill="none" 
+                      viewBox="0 0 24 24" 
+                      stroke="currentColor" 
+                      strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+
+                    {/* Dátum */}
+                    <h3 className="text-lg font-bold text-white">
+                      📅 {new Date(group.date).toLocaleDateString('hu-HU', { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      })}
+                    </h3>
+                  </div>
+
+                  {/* Napi statisztikák */}
+                  <div className="flex items-center gap-6">
+                    <div className="text-right">
+                      <p className="text-xs text-slate-400">Meccsek</p>
+                      <p className="text-sm font-bold text-white">{group.matches.length}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-slate-400">Win/Loss</p>
+                      <p className="text-sm font-bold text-white">
+                        <span className="text-green">{dayStats.wins}W</span> / <span className="text-red">{dayStats.losses}L</span>
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-slate-400">Profit</p>
+                      <p className={`text-sm font-bold ${dayStats.profit >= 0 ? 'text-green' : 'text-red'}`}>
+                        {dayStats.profit >= 0 ? '+' : ''}{dayStats.profit.toFixed(0)} Ft
+                      </p>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Nap tartalma - csak ha ki van bontva */}
+                {isExpanded && (
+                  <div className="border-t border-dark-border p-5 space-y-3">
+                    {group.matches.map((match, idx) => {
+                      const stake = match.stake || defaultStake;
+                      const odds = match.betType === 'Over' 
+                        ? (match.tip.oddsOver || 2.0) 
+                        : match.betType === 'Under' 
+                          ? (match.tip.oddsUnder || 2.0) 
+                          : 2.0;
+                      
+                      const profit = match.result === 'Win' 
+                        ? (odds - 1) * stake 
+                        : match.result === 'Loss' 
+                          ? -stake 
+                          : 0;
+
+                      return (
+                        <div
+                          key={idx}
+                          className="bg-dark-bg/40 border border-dark-border rounded-lg p-3"
+                        >
+                          {/* Sor 1: Meccs info + eredmény + törlés */}
+                          <div className="flex items-center gap-4 mb-2">
+                            <span className="text-sm font-mono text-white w-14 shrink-0">{match.tip.time}</span>
+                            <div className="flex-1">
+                              <p className="text-sm text-white font-semibold">
+                                {match.tip.playerA} vs {match.tip.playerB}
+                              </p>
+                              <p className="text-xs text-slate-400">
+                                GÓL {match.tip.vartGol.toFixed(1)} | O/U {match.tip.ouLine}
+                              </p>
+                            </div>
+                            <div className="text-right shrink-0">
+                              {match.result ? (
+                                <div>
+                                  <p className={`text-sm font-bold ${match.result === 'Win' ? 'text-green' : 'text-red'}`}>
+                                    {match.result === 'Win' ? '✅ Win' : '❌ Loss'}
+                                  </p>
+                                  <p className={`text-xs ${profit >= 0 ? 'text-green' : 'text-red'}`}>
+                                    {profit >= 0 ? '+' : ''}{profit.toFixed(0)} Ft
+                                  </p>
+                                </div>
+                              ) : (
+                                <p className="text-xs text-slate-500 italic">Folyamatban</p>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => deleteEntry(match.matchId)}
+                              className="text-slate-600 hover:text-red text-sm ml-2 shrink-0 cursor-pointer transition-colors"
+                              title="Törlés a naplóból"
+                            >
+                              ✕
+                            </button>
+                          </div>
+
+                          {/* Sor 2: Szerkeszthető mezők */}
+                          <div className="grid grid-cols-5 gap-2">
+                            <select
+                              value={match.betType || ''}
+                              onChange={e => updateEntry(match.matchId, 'betType', e.target.value || undefined)}
+                              className="bg-dark-bg border border-dark-border rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-accent"
+                            >
+                              <option value="">O/U</option>
+                              <option value="Over">Over</option>
+                              <option value="Under">Under</option>
+                            </select>
+
+                            <select
+                              value={match.betLine || ''}
+                              onChange={e => updateEntry(match.matchId, 'betLine', e.target.value ? parseFloat(e.target.value) : undefined)}
+                              className="bg-dark-bg border border-dark-border rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-accent"
+                            >
+                              <option value="">Vonal</option>
+                              {[1.5,2.5,3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5].map(v => (
+                                <option key={v} value={v}>{v}</option>
+                              ))}
+                            </select>
+
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="1.01"
+                              max="50"
+                              placeholder="Odds"
+                              value={match.odds || ''}
+                              onChange={e => updateEntry(match.matchId, 'odds', e.target.value ? parseFloat(e.target.value) : undefined)}
+                              className="bg-dark-bg border border-dark-border rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-accent placeholder-slate-600"
+                            />
+
+                            <input
+                              type="number"
+                              step="100"
+                              min="100"
+                              placeholder="Tét (Ft)"
+                              value={match.stake || ''}
+                              onChange={e => updateEntry(match.matchId, 'stake', e.target.value ? parseInt(e.target.value) : undefined)}
+                              className="bg-dark-bg border border-dark-border rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-accent placeholder-slate-600"
+                            />
+
+                            <select
+                              value={match.result || ''}
+                              onChange={e => updateEntry(match.matchId, 'result', e.target.value || undefined)}
+                              className={`bg-dark-bg border rounded px-2 py-1 text-xs font-semibold focus:outline-none focus:border-accent ${
+                                match.result === 'Win' ? 'border-green text-green' :
+                                match.result === 'Loss' ? 'border-red text-red' :
+                                'border-dark-border text-white'
+                              }`}
+                            >
+                              <option value="">Eredmény</option>
+                              <option value="Win">Win</option>
+                              <option value="Loss">Loss</option>
+                            </select>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

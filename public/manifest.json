@@ -1,0 +1,25 @@
+{
+  "name": "eSport Bet",
+  "short_name": "eSport Bet",
+  "description": "FIFA / EA FC esport prediction engine - H2H-first model with real Bet365 odds",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f1117",
+  "theme_color": "#6366f1",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/ebet.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/ebet.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

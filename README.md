@@ -14,5 +14,10 @@
 1. **Előfeltételek:** Telepítsd a [Node.js](https://nodejs.org/)-t (ha szükséges a programodhoz).
 2. **Letöltés:** Klónozd a tárolót vagy töltsd le a ZIP-et.
 3. **Indítás:** Start.bat (dupla klikk) 
+<<<<<<< HEAD
 4. **Dashboard** Localhost:5180 (automatikusan nyílik)
 5. **Leállítás** VITE v5. ablakban Ctrl+C majd Y 
+=======
+4. **Dashboard:** Localhost:5180 (automatikusan nyílik)
+5. **Leállítás:** VITE v5. ablakban Ctrl+C, majd Y.
+>>>>>>> 1c97ee43cbc18c862e0a392337e7498e687a1118

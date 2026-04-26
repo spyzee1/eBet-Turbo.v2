@@ -63,7 +63,19 @@
       "Bash(curl -s \"http://localhost:3005/api/top-tips?league=Esoccer+H2H+GG+League&limit=2\")",
       "Bash(python3 -c \" import json, sys d = json.load\\(sys.stdin\\) h2h = [m for m in d if m.get\\('league'\\) == 'Esoccer H2H GG League'] print\\(f'H2H matches: {len\\(h2h\\)}'\\) for m in h2h: print\\(f' {m[\\\\\"time\\\\\"]} {m[\\\\\"playerHome\\\\\"]} vs {m[\\\\\"playerAway\\\\\"]}'\\) \")",
       "Read(//c/eSportBet//**)",
-      "Read(//c/eSportBet/**)"
+      "Read(//c/eSportBet/**)",
+      "Bash(node -e \"console.log\\('Server local time:', new Date\\(\\).toString\\(\\), '| Hours:', new Date\\(\\).getHours\\(\\), '| UTC Hours:', new Date\\(\\).getUTCHours\\(\\)\\)\")",
+      "Bash(curl -s http://localhost:3005/api/debug-live)",
+      "Bash(findstr :3005)",
+      "Bash(taskkill /F /PID 451732)",
+      "Bash(npm run *)",
+      "Bash(findstr LISTENING)",
+      "Bash(findstr \":3005.*LISTENING\")",
+      "PowerShell(Stop-Process -Id 451732 -Force -ErrorAction SilentlyContinue; Start-Sleep 1; $p = Get-NetTCPConnection -LocalPort 3005 -State Listen -ErrorAction SilentlyContinue; if \\($p\\) { \"Still running: PID $\\($p.OwningProcess\\)\" } else { \"Port 3005 szabad\" })",
+      "PowerShell(Start-Sleep 5; $r = Invoke-WebRequest -Uri \"http://localhost:3005/api/debug-live\" -UseBasicParsing -ErrorAction SilentlyContinue; if \\($r\\) { $r.Content | Select-String -Pattern \".\" | Select-Object -First 5 } else { \"Szerver még nem válaszol\" })",
+      "PowerShell($p = Get-NetTCPConnection -LocalPort 3005 -State Listen -ErrorAction SilentlyContinue; if \\($p\\) { Stop-Process -Id $p.OwningProcess -Force }; Start-Sleep 1; Set-Location \"C:\\\\eSportBet\\\\eBet\\\\e-sport-bet-main\"; Start-Process -NoNewWindow -FilePath \"npx\" -ArgumentList \"tsx\",\"server/index.ts\"; Start-Sleep 5; $r = Invoke-WebRequest -Uri \"http://localhost:3005/api/live-scores\" -UseBasicParsing -ErrorAction SilentlyContinue; $r.Content | ConvertFrom-Json | Select-Object -First 3 | ConvertTo-Json)",
+      "PowerShell($p = Get-NetTCPConnection -LocalPort 3005 -State Listen -ErrorAction SilentlyContinue; if \\($p\\) { Stop-Process -Id $p.OwningProcess -Force }; Start-Sleep 1; Set-Location \"C:\\\\eSportBet\\\\eBet\\\\e-sport-bet-main\"; Start-Process -NoNewWindow -FilePath \"npx\" -ArgumentList \"tsx\",\"server/index.ts\"; Start-Sleep 4; $r = Invoke-WebRequest -Uri \"http://localhost:3005/api/live-scores\" -UseBasicParsing -ErrorAction SilentlyContinue; \\($r.Content | ConvertFrom-Json\\).value | Select-Object playerA,playerB,scoreA,scoreB,minute,periodName | Select-Object -First 4 | ConvertTo-Json)",
+      "PowerShell(Start-Sleep 4; $r = Invoke-WebRequest -Uri \"http://localhost:3005/api/live-scores\" -UseBasicParsing -ErrorAction SilentlyContinue; if \\($r\\) { \\($r.Content | ConvertFrom-Json\\) | Select-Object playerA,playerB,scoreA,scoreB,minute,periodName | Select-Object -First 4 | ConvertTo-Json } else { \"nem válaszol\" })"
     ]
   }
 }

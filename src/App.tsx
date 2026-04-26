@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import Sidebar from './components/Sidebar';
+import TopNav from './components/TopNav';
 import Dashboard from './components/Dashboard';
 import Upcoming from './components/Upcoming';
 import MatchForm from './components/MatchForm';
@@ -9,6 +9,8 @@ import PlayerProfile from './components/PlayerProfile';
 import TopTips from './components/TopTips';
 import Backtest from './components/Backtest';
 import Naplo from './components/Naplo';
+import Segedlet from './components/Segedlet';
+import Statisztika from './components/Statisztika';
 import ToastContainer from './components/ToastContainer';
 import { MatchInput, MatchResult, Settings } from './model/types';
 import { calculateMatch } from './model/calculator';
@@ -20,22 +22,13 @@ import {
 } from './model/store';
 import { autoCheckResults } from './api';
 
-type View = 'dashboard' | 'topTips' | 'naplo' | 'upcoming' | 'newMatch' | 'playerProfile' | 'backtest' | 'history' | 'settings';
+type View = 'dashboard' | 'topTips' | 'naplo' | 'upcoming' | 'newMatch' | 'playerProfile' | 'backtest' | 'history' | 'settings' | 'statistics' | 'segedlet';
 
 function App() {
-  const [view, setView] = useState<View>('dashboard');
+  const [view, setView] = useState<View>('topTips');
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [matches, setMatches] = useState<MatchInput[]>(loadMatches);
   const [history, setHistory] = useState<HistoryEntry[]>(loadHistory);
-  const [darkMode, setDarkMode] = useState(() => {
-    const saved = localStorage.getItem('esport-bet-theme');
-    return saved !== 'light';
-  });
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('light', !darkMode);
-    localStorage.setItem('esport-bet-theme', darkMode ? 'dark' : 'light');
-  }, [darkMode]);
 
   const results: MatchResult[] = matches.map(m => calculateMatch(m, settings));
 
@@ -127,39 +120,17 @@ function App() {
   const clearHistory = useCallback(() => { setHistory([]); }, []);
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar current={view} onChange={setView} activeCount={results.filter(r => r.valueBet !== 'PASS').length} darkMode={darkMode} onToggleTheme={() => setDarkMode(d => !d)} />
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-5xl mx-auto p-4 pt-14 lg:pt-6 lg:p-8">
-          <div className="mb-6 lg:mb-8">
-            <h1 className="text-xl lg:text-2xl font-bold text-white">
-              {view === 'dashboard' && 'Dashboard'}
-              {view === 'topTips' && 'Napi Top Tippek'}
-              {view === 'naplo' && 'Napló'}
-              {view === 'upcoming' && 'Közelgő meccsek'}
-              {view === 'newMatch' && 'Új meccs elemzése'}
-              {view === 'playerProfile' && 'Játékos profil'}
-              {view === 'backtest' && 'Backtest'}
-              {view === 'history' && 'Tipp előzmény'}
-              {view === 'settings' && 'Beállítások'}
-            </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              {view === 'dashboard' && 'Aktuális elemzések és statisztikák'}
-              {view === 'topTips' && 'A modell automatikusan kiválogatja a legjobb value beteket'}
-              {view === 'naplo' && 'Utolsó 30 nap megtett meccsek, ROI és statisztikák'}
-              {view === 'upcoming' && 'Élő menetrend az EsoccerBet-ről — egy kattintással elemezd'}
-              {view === 'newMatch' && 'Add meg a meccs adatait az elemzéshez'}
-              {view === 'playerProfile' && 'Részletes statisztikák, forma, csapat és ellenfél bontás'}
-              {view === 'backtest' && 'Modell teljesítmény historikus meccseken + súly optimalizálás'}
-              {view === 'history' && 'Korábban lezárt tippek és eredmények'}
-              {view === 'settings' && 'Modell paraméterek és bankroll beállítások'}
-            </p>
-          </div>
-          {view === 'dashboard' && <Dashboard results={results} history={history} bankroll={settings.bankroll} onRemoveMatch={removeMatch} onSaveToHistory={saveToHistory} />}
+    <div className="min-h-screen bg-dark-bg flex flex-col">
+      <TopNav current={view} onChange={setView} />
+      <main className="flex-1">
+        <div className="max-w-screen-2xl mx-auto p-4 lg:p-6">
           {view === 'topTips' && <TopTips onAddMatch={addMatch} />}
           {view === 'naplo' && <Naplo />}
-          {view === 'upcoming' && <Upcoming onAnalyze={addMatch} />}
           {view === 'newMatch' && <MatchForm onSubmit={addMatch} />}
+          {view === 'segedlet' && <Segedlet />}
+          {view === 'statistics' && <Statisztika />}
+          {view === 'dashboard' && <Dashboard results={results} history={history} bankroll={settings.bankroll} onRemoveMatch={removeMatch} onSaveToHistory={saveToHistory} />}
+          {view === 'upcoming' && <Upcoming onAnalyze={addMatch} />}
           {view === 'playerProfile' && <PlayerProfile onBack={() => setView('dashboard')} />}
           {view === 'backtest' && <Backtest />}
           {view === 'history' && <History history={history} onUpdateOutcome={updateOutcome} onClear={clearHistory} />}

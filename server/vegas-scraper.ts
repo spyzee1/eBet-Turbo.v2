@@ -24,6 +24,18 @@ export interface VegasOdds {
   source: 'vegas.hu';
 }
 
+export interface LiveScore {
+  playerA: string;
+  playerB: string;
+  scoreA: number;
+  scoreB: number;
+  minute: number | null;      // null ha az API nem adja
+  period: number | null;      // 1 = 1. félidő, 2 = 2. félidő
+  periodName: string | null;  // pl. "1. félidő", "2. félidő"
+  isLive: boolean;
+  source: 'altenar';
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // CONSTANTS
 // ──────────────────────────────────────────────────────────────────────────────
@@ -61,6 +73,11 @@ interface AltenarEvent {
   marketIds: number[];
   startDate: string;
   status: number;
+  // Live score fields — tényleges Altenar formátum (debug-live alapján)
+  score?: number[];          // [homeScore, awayScore] tömb
+  liveTime?: string;         // pl. "1. félidő", "2. félidő"
+  ls?: string;               // ugyanaz mint liveTime
+  sc?: number;               // eltelt másodpercek az aktuális félidőben
 }
 interface AltenarMarket {
   id: number;
@@ -91,8 +108,8 @@ interface AltenarResponse {
 let eventCache: { data: AltenarResponse; ts: number } | null = null;
 const matchCache = new Map<string, { data: VegasOdds | null; ts: number }>();
 
-const EVENT_CACHE_TTL = 2 * 60 * 1000;   // 2 min — events change often
-const MATCH_CACHE_TTL = 3 * 60 * 1000;   // 3 min
+const EVENT_CACHE_TTL = 10 * 1000;        // 10 sec — live GT Leagues odds update frequently
+const MATCH_CACHE_TTL = 10 * 1000;        // 10 sec
 
 // ──────────────────────────────────────────────────────────────────────────────
 // FETCH ALL UPCOMING E-SOCCER EVENTS
@@ -190,16 +207,22 @@ function extractOddsFromEvent(
   }
 
   // O/U market (may not be available for all leagues, e.g. GT Leagues)
-  const ouMarket = markets.find(m => m.typeId === MARKET_TOTAL_GOALS);
-  if (ouMarket && ouMarket.sv) {
+  // Try all markets with typeId 18 (live API may have multiple, pick the valid one)
+  const ouMarkets = markets.filter(m => m.typeId === MARKET_TOTAL_GOALS);
+  for (const ouMarket of ouMarkets) {
+    if (!ouMarket.sv) continue;
     const ouLine = parseFloat(ouMarket.sv.replace(',', '.'));
-    if (!isNaN(ouLine)) {
-      const ouOdds = data.odds.filter(o => ouMarket.oddIds.includes(o.id) && o.oddStatus === 0);
-      const overOdd = ouOdds.find(o => o.typeId === ODD_OVER);
-      const underOdd = ouOdds.find(o => o.typeId === ODD_UNDER);
-      if (overOdd && underOdd) {
-        return { playerA, playerB, ouLine, oddsOver: overOdd.price, oddsUnder: underOdd.price, oddsA, oddsB, source: 'vegas.hu' };
-      }
+    // Reject whole-number lines (e.g. "4") — Altenar live API artifact; real lines end in .5
+    if (isNaN(ouLine) || ouLine % 1 === 0) continue;
+    const ouOdds = data.odds.filter(o => ouMarket.oddIds.includes(o.id) && o.oddStatus === 0);
+    const overOdd = ouOdds.find(o => o.typeId === ODD_OVER);
+    const underOdd = ouOdds.find(o => o.typeId === ODD_UNDER);
+    // Reject unrealistic odds (live API sometimes bleeds wrong market data)
+    const validOdds = overOdd && underOdd
+      && overOdd.price >= 1.05 && overOdd.price <= 5.0
+      && underOdd.price >= 1.05 && underOdd.price <= 5.0;
+    if (validOdds) {
+      return { playerA, playerB, ouLine, oddsOver: overOdd!.price, oddsUnder: underOdd!.price, oddsA, oddsB, source: 'vegas.hu' };
     }
   }
 
@@ -294,4 +317,110 @@ export async function getAllVegasOdds(): Promise<VegasOdds[]> {
   } catch {
     return [];
   }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// LIVE SCORES
+// ──────────────────────────────────────────────────────────────────────────────
+
+// Separate live-only cache (rövid TTL, real-time adatokhoz)
+let liveCache: { data: AltenarResponse; ts: number } | null = null;
+const LIVE_CACHE_TTL = 8 * 1000; // 8 mp — live adathoz gyors frissítés
+
+async function fetchLiveOnly(): Promise<AltenarResponse> {
+  if (liveCache && Date.now() - liveCache.ts < LIVE_CACHE_TTL) {
+    return liveCache.data;
+  }
+  try {
+    const resp = await axios.get<AltenarResponse>(`${API_BASE}/widget/GetLivenow`, {
+      headers: HEADERS,
+      params: { ...COMMON_PARAMS, sportId: E_SOCCER_SPORT_ID },
+      timeout: 10000,
+    });
+    liveCache = { data: resp.data, ts: Date.now() };
+    return resp.data;
+  } catch {
+    return liveCache?.data ?? { events: [], markets: [], odds: [], competitors: [] };
+  }
+}
+
+/** Parsol score-t: score = [homeScore, awayScore] tömb */
+function parseScore(event: AltenarEvent): { scoreA: number; scoreB: number } {
+  if (Array.isArray(event.score) && event.score.length >= 2) {
+    return { scoreA: event.score[0], scoreB: event.score[1] };
+  }
+  return { scoreA: 0, scoreB: 0 };
+}
+
+/** Parsol percet: startDate alapján számolt valós eltelt perc.
+ *  Az Altenar sc mezője nem megbízható időszámláló, ezért a kezdési időből számolunk.
+ */
+function parseMinute(event: AltenarEvent): number | null {
+  if (!event.startDate) return null;
+  const started = new Date(event.startDate).getTime();
+  const elapsed = Math.floor((Date.now() - started) / 60000);
+  return Math.max(0, elapsed);
+}
+
+/** Parsol félidőt: liveTime = "1. félidő" / "2. félidő" */
+function parsePeriod(event: AltenarEvent): number | null {
+  const lt = event.liveTime ?? event.ls ?? '';
+  if (lt.includes('1')) return 1;
+  if (lt.includes('2')) return 2;
+  return null;
+}
+
+/** Visszaadja a félidő nevét megjelenítéshez */
+function parsePeriodName(event: AltenarEvent): string | null {
+  return event.liveTime ?? event.ls ?? null;
+}
+
+/**
+ * Visszaadja az összes élő e-soccer meccs gólállását és menetidejét.
+ */
+export async function getAllLiveScores(): Promise<LiveScore[]> {
+  try {
+    const data = await fetchLiveOnly();
+    const competitorMap = new Map(data.competitors.map(c => [c.id, extractPlayer(c.name)]));
+    const result: LiveScore[] = [];
+
+    for (const event of data.events) {
+      if (event.competitorIds.length < 2) continue;
+      // status: 0 = upcoming, 1+ = live (Altenar konvenció)
+      const isLive = event.status >= 1;
+      const [cA, cB] = event.competitorIds;
+      const pA = competitorMap.get(cA) || '';
+      const pB = competitorMap.get(cB) || '';
+      if (!pA || !pB) continue;
+
+      const { scoreA, scoreB } = parseScore(event);
+      result.push({
+        playerA: pA,
+        playerB: pB,
+        scoreA,
+        scoreB,
+        minute: parseMinute(event),
+        period: parsePeriod(event),
+        periodName: parsePeriodName(event),
+        isLive,
+        source: 'altenar',
+      });
+    }
+    return result;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Nyers Altenar live response — debug célra.
+ * Visszaad 3 eseményt az összes mezőjükkel együtt.
+ */
+export async function getRawLiveDebug(): Promise<{ eventCount: number; sample: AltenarEvent[]; competitorSample: AltenarCompetitor[] }> {
+  const data = await fetchLiveOnly();
+  return {
+    eventCount: data.events.length,
+    sample: data.events.slice(0, 3),
+    competitorSample: data.competitors.slice(0, 6),
+  };
 }

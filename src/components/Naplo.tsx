@@ -1,25 +1,53 @@
 import { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 
+function leagueBadge(l: string) {
+  if (l === 'GT Leagues') return 'bg-green/20 text-green';
+  if (l === 'Esoccer Battle') return 'bg-yellow/20 text-yellow';
+  if (l === 'Cyber Live Arena') return 'bg-purple/20 text-purple';
+  if (l === 'Esoccer H2H GG League') return 'bg-orange-500/20 text-orange-400';
+  if (l === 'Esports Volta') return 'bg-cyan-500/20 text-cyan-400';
+  return 'bg-slate-600/30 text-slate-400';
+}
+function leagueAbbr(l: string) {
+  if (l === 'GT Leagues') return 'GT';
+  if (l === 'Esoccer Battle') return 'EB';
+  if (l === 'Cyber Live Arena') return 'CLA';
+  if (l === 'Esoccer H2H GG League') return 'H2H';
+  if (l === 'Esports Volta') return 'VOLTA';
+  return 'EV';
+}
+
 interface CheckedMatch {
   matchId: string;
   tip: {
     time: string;
     date: string;
+    league?: string;
     playerA: string;
     playerB: string;
     vartGol: number;
     ouLine: number;
     oddsOver?: number;
     oddsUnder?: number;
+    lastMatchesA?: Array<{ opponent: string; scoreHome: number; scoreAway: number; result: string; date: string }>;
+    lastMatchesB?: Array<{ opponent: string; scoreHome: number; scoreAway: number; result: string; date: string }>;
   };
   timestamp: number;
   date: string; // YYYY-MM-DD formátum
   betType?: 'Over' | 'Under';
   betLine?: number;
   result?: 'Win' | 'Loss';
-  stake?: number; // Tét összege
-  odds?: number; // ✅ ÚJ: Odds mező
+  stake?: number;
+  odds?: number;
+  fromTrend?: boolean;
+  trendType?: 'VALUE' | 'TREND';
+  trendAboveLinePct?: number;
+  trendAboveLineCount?: number;
+  trendAvgGoals?: number;
+  trendSlope?: number;
+  trendTodayH2H?: Array<{ time: string; goalsA: number; goalsB: number; total: number }>;
+  trendTotalMatches?: number;
 }
 
 interface DayGroup {
@@ -505,15 +533,71 @@ export default function Naplo() {
                           className="bg-dark-bg/40 border border-dark-border rounded-lg p-3"
                         >
                           {/* Sor 1: Meccs info + eredmény + törlés */}
-                          <div className="flex items-center gap-4 mb-2">
+                          <div className="flex items-center gap-2 mb-2">
+                            {match.tip.league && (
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 ${leagueBadge(match.tip.league)}`}>
+                                {leagueAbbr(match.tip.league)}
+                              </span>
+                            )}
+                            {match.fromTrend && match.trendType === 'VALUE' && (
+                              <span style={{backgroundColor:'#facc15',color:'#111827'}} className="px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0">
+                                💰 VALUE
+                              </span>
+                            )}
+                            {match.fromTrend && match.trendType === 'TREND' && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 bg-orange-500 text-white">
+                                🚀 TREND
+                              </span>
+                            )}
                             <span className="text-sm font-mono text-white w-14 shrink-0">{match.tip.time}</span>
-                            <div className="flex-1">
+                            <div className="flex-1 min-w-0">
                               <p className="text-sm text-white font-semibold">
                                 {match.tip.playerA} vs {match.tip.playerB}
                               </p>
-                              <p className="text-xs text-slate-400">
-                                GÓL {match.tip.vartGol.toFixed(1)} | O/U {match.tip.ouLine}
-                              </p>
+                              {match.fromTrend ? (
+                                <div className="flex items-center gap-2 mt-1 overflow-x-auto scrollbar-none">
+                                  <span className="text-xs text-slate-400 shrink-0">O/U <span className="text-white font-bold">{match.betLine ?? match.tip.ouLine}</span></span>
+                                  {match.trendAboveLineCount !== undefined && match.trendTotalMatches !== undefined && (
+                                    <span className="text-xs text-slate-400 shrink-0">Felett: <span className="text-yellow-300 font-bold">{match.trendAboveLineCount}/{match.trendTotalMatches} ({Math.round((match.trendAboveLinePct ?? 0) * 100)}%)</span></span>
+                                  )}
+                                  {match.trendAvgGoals !== undefined && (
+                                    <span className="text-xs text-slate-400 shrink-0">Átlag: <span className="text-white font-bold">{match.trendAvgGoals.toFixed(1)}</span></span>
+                                  )}
+                                  {match.trendType === 'TREND' && match.trendSlope !== undefined && (
+                                    <span className="text-xs text-slate-400 shrink-0">Trend: <span className="text-orange-400 font-bold">{match.trendSlope >= 0 ? '+' : ''}{match.trendSlope.toFixed(1)}/m</span></span>
+                                  )}
+                                  {match.trendTodayH2H && match.trendTodayH2H.length > 0 && match.trendTodayH2H.map((h, hi) => (
+                                    <span key={hi} className={`text-xs font-mono font-bold px-1.5 py-0.5 rounded shrink-0 ${h.total > (match.betLine ?? match.tip.ouLine) ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+                                      {h.goalsA}–{h.goalsB}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2 mt-1 overflow-x-auto scrollbar-none">
+                                  <span className="text-xs text-slate-400 shrink-0">GÓL <span className="text-white font-bold">{match.tip.vartGol.toFixed(1)}</span></span>
+                                  <span className="text-xs text-slate-400 shrink-0">O/U <span className="text-white font-bold">{match.tip.ouLine}</span></span>
+                                  {match.tip.lastMatchesA && match.tip.lastMatchesA.length > 0 && (
+                                    <>
+                                      <span className="text-xs text-slate-500 shrink-0 ml-1">{match.tip.playerA.split(' ')[0]}:</span>
+                                      {match.tip.lastMatchesA.slice(0, 5).map((lm, li) => (
+                                        <span key={li} className={`text-xs font-mono font-bold px-1.5 py-0.5 rounded shrink-0 ${lm.result === 'win' ? 'bg-green-600 text-white' : lm.result === 'loss' ? 'bg-red-600 text-white' : 'bg-slate-600 text-white'}`}>
+                                          {lm.scoreHome}–{lm.scoreAway}
+                                        </span>
+                                      ))}
+                                    </>
+                                  )}
+                                  {match.tip.lastMatchesB && match.tip.lastMatchesB.length > 0 && (
+                                    <>
+                                      <span className="text-xs text-slate-500 shrink-0 ml-1">{match.tip.playerB.split(' ')[0]}:</span>
+                                      {match.tip.lastMatchesB.slice(0, 5).map((lm, li) => (
+                                        <span key={li} className={`text-xs font-mono font-bold px-1.5 py-0.5 rounded shrink-0 ${lm.result === 'win' ? 'bg-green-600 text-white' : lm.result === 'loss' ? 'bg-red-600 text-white' : 'bg-slate-600 text-white'}`}>
+                                          {lm.scoreHome}–{lm.scoreAway}
+                                        </span>
+                                      ))}
+                                    </>
+                                  )}
+                                </div>
+                              )}
                             </div>
                             <div className="text-right shrink-0">
                               {match.result ? (

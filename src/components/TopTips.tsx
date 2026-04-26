@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
-import { fetchTopTips, TopTip, TopTipsResponse } from '../api';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { fetchTopTips, TopTip, TopTipsResponse, fetchLiveScores, LiveScore, clearServerCache } from '../api';
 import { MatchInput } from '../model/types';
 import H2HModal from './H2HModal';
-import { useFilterPresets, TipFilterPreset } from '../hooks/useFilterPresets';
+import TrendWidget from './TrendWidget';
 import { useNewTipDetector, useNotificationSettings } from '../hooks/useNotifications';
 
 interface Props {
@@ -24,6 +24,7 @@ function leagueBadge(l: string) {
   if (l === 'Esoccer Battle') return 'bg-yellow/20 text-yellow';
   if (l === 'Cyber Live Arena') return 'bg-purple/20 text-purple';
   if (l === 'Esoccer H2H GG League') return 'bg-orange-500/20 text-orange-400';
+  if (l === 'Esports Volta') return 'bg-cyan-500/20 text-cyan-400';
   return 'bg-slate-600/30 text-slate-400';
 }
 
@@ -33,6 +34,15 @@ function categoryBadge(cat: string | undefined) {
   return { bg: 'bg-slate-600 text-slate-200', label: 'NO BET' };
 }
 
+function leagueAbbr(l: string) {
+  if (l === 'GT Leagues') return 'GT';
+  if (l === 'Esoccer Battle') return 'EB';
+  if (l === 'Cyber Live Arena') return 'CLA';
+  if (l === 'Esoccer H2H GG League') return 'H2H';
+  if (l === 'Esports Volta') return 'VOLTA';
+  return 'EV';
+}
+
 function medalIcon(idx: number) {
   if (idx === 0) return '🥇';
   if (idx === 1) return '🥈';
@@ -40,7 +50,6 @@ function medalIcon(idx: number) {
   return `#${idx + 1}`;
 }
 
-type Filter = 'all' | 'strong' | 'h2h' | 'liveOdds';
 type SortMode = 'time' | 'probability';
 
 const CHECKED_GREEN_KEY = 'checked_green_matches';
@@ -57,21 +66,24 @@ interface CheckedMatch {
   result?: 'Win' | 'Loss';
   stake?: number;
   odds?: number;
+  finalScore?: string;
+  fromTrend?: boolean;
+  trendType?: 'VALUE' | 'TREND';
 }
 
 export default function TopTips({ onAddMatch }: Props) {
   const [data, setData] = useState<TopTipsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [selectedLeagues, setSelectedLeagues] = useState<Set<string>>(new Set());
-  const [limit, setLimit] = useState(10);
-  const [filter, setFilter] = useState<Filter>('all');
+  const [selectedLeagues, setSelectedLeagues] = useState<Set<string>>(new Set(['Esoccer Battle']));
+  const [limit, setLimit] = useState(20);
   const [sortMode, setSortMode] = useState<SortMode>('time');
   const [h2hModal, setH2hModal] = useState<{ a: string; b: string; lg: string } | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
-  const [presetName, setPresetName] = useState('');
-  const [showPresetForm, setShowPresetForm] = useState(false);
-  const [strategy, setStrategy] = useState<'A' | 'B'>('B'); // ← ÚJ: Strategy választó (default: B)
+  const [strategy, setStrategy] = useState<'A' | 'B' | 'C'>('A');
+  const [globalStake, setGlobalStake] = useState(() => parseInt(localStorage.getItem('global_stake') || '2000'));
+
+  useEffect(() => { localStorage.setItem('global_stake', String(globalStake)); }, [globalStake]);
 
   const [checkedMatches, setCheckedMatches] = useState<CheckedMatch[]>(() => {
     try {
@@ -150,7 +162,6 @@ export default function TopTips({ onAddMatch }: Props) {
     return () => clearInterval(interval);
   }, []);
 
-  const { presets, addPreset, removePreset } = useFilterPresets();
   const { soundEnabled, toggleSound, browserNotifEnabled, enableBrowserNotif, disableBrowserNotif } = useNotificationSettings();
 
   useNewTipDetector(data?.tips, true);
@@ -179,7 +190,7 @@ export default function TopTips({ onAddMatch }: Props) {
         ? Array.from(selectedLeagues)[0] 
         : undefined;
       
-      const result = await fetchTopTips(leagueFilter, limit, strategy); // ← STRATEGY PARAMÉTER!
+      const result = await fetchTopTips(leagueFilter, limit, strategy);
       setData(result);
     } catch {
       setError('Nem sikerült betölteni. Ellenőrizd a szervert (port 3005).');
@@ -187,6 +198,92 @@ export default function TopTips({ onAddMatch }: Props) {
       setLoading(false);
     }
   }, [selectedLeagues, limit, strategy]); // ← strategy dependency!
+
+  // ── Live score polling (10 másodpercenként) ────────────────────────────────
+  const [liveScores, setLiveScores] = useState<LiveScore[]>([]);
+  // Utolsó ismert live score minden meccshez (auto Win/Loss detektáláshoz)
+  const lastKnownLive = useRef<Map<string, LiveScore>>(new Map());
+
+  useEffect(() => {
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const scores = await fetchLiveScores();
+        if (cancelled) return;
+
+        // Auto Win/Loss: ha egy korábban élő meccs eltűnt a listából → vége
+        // Altenar félidőben is küldhet isLive=false-t, ezért csak eltűnést detektálunk
+        const currentKeys = new Set(scores.map(s => `${s.playerA}|${s.playerB}`));
+        for (const [key, prevScore] of lastKnownLive.current) {
+          if (!currentKeys.has(key)) {
+            // Meccs véget ért — megkeresi a Mérkőzés Listában
+            setCheckedMatches(prev => {
+              const updated = [...prev];
+              const idx = updated.findIndex(m => {
+                const nA = m.tip.playerA.toLowerCase();
+                const nB = m.tip.playerB.toLowerCase();
+                const sA = prevScore.playerA.toLowerCase();
+                const sB = prevScore.playerB.toLowerCase();
+                return (sA.includes(nA) || nA.includes(sA)) && (sB.includes(nB) || nB.includes(sB))
+                    || (sA.includes(nB) || nB.includes(sA)) && (sB.includes(nA) || nA.includes(sB));
+              });
+              if (idx === -1) return prev;
+              const m = updated[idx];
+              if (m.result) return prev; // már be van állítva, nem írjuk felül
+              if (!m.betType || !m.betLine) return prev;
+              // Időablak: csak ha a meccs ütemezett ideje ±90 percen belül van
+              const diffMin = (Date.now() - m.timestamp) / 60000;
+              if (diffMin < -15 || diffMin > 90) return prev;
+              const total = prevScore.scoreA + prevScore.scoreB;
+              let outcome: 'Win' | 'Loss' | null = null;
+              if (m.betType === 'Over')  outcome = total > m.betLine  ? 'Win' : 'Loss';
+              if (m.betType === 'Under') outcome = total < m.betLine  ? 'Win' : 'Loss';
+              if (!outcome) return prev;
+              const finalScore = `${prevScore.scoreA}:${prevScore.scoreB}`;
+              const next = { ...m, result: outcome, finalScore };
+              updated[idx] = next;
+              // Napló frissítése is
+              try {
+                const journal = JSON.parse(localStorage.getItem(BETTING_JOURNAL_KEY) || '[]');
+                const ji = journal.findIndex((j: any) => j.matchId === m.matchId);
+                if (ji !== -1) journal[ji] = { ...journal[ji], result: outcome, finalScore };
+                localStorage.setItem(BETTING_JOURNAL_KEY, JSON.stringify(journal));
+                localStorage.setItem(CHECKED_GREEN_KEY, JSON.stringify(updated));
+                window.dispatchEvent(new Event('journal-updated'));
+              } catch { /* silent */ }
+              return updated;
+            });
+            lastKnownLive.current.delete(key);
+          }
+        }
+        // Frissítjük a lastKnownLive map-et az élő meccsekkel
+        for (const s of scores) {
+          if (s.isLive) lastKnownLive.current.set(`${s.playerA}|${s.playerB}`, s);
+        }
+
+        setLiveScores(scores);
+      } catch { /* silent */ }
+    };
+    poll();
+    const id = setInterval(poll, 10_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  /** Megkeresi a live score-t — csak ha a meccs ütemezett időpontjától max ±90 perc telt el */
+  const findLiveScore = (pA: string, pB: string, matchTimestamp?: number): LiveScore | null => {
+    if (matchTimestamp) {
+      const diffMin = (Date.now() - matchTimestamp) / 60000;
+      if (diffMin < -15 || diffMin > 90) return null; // túl korán vagy régen játszódott
+    }
+    const nA = pA.toLowerCase().trim();
+    const nB = pB.toLowerCase().trim();
+    return liveScores.find(s => {
+      const sA = s.playerA.toLowerCase();
+      const sB = s.playerB.toLowerCase();
+      return (sA.includes(nA) || nA.includes(sA)) && (sB.includes(nB) || nB.includes(sB))
+        || (sA.includes(nB) || nB.includes(sA)) && (sB.includes(nA) || nA.includes(sB));
+    }) ?? null;
+  };
 
   const toggleLeague = (league: string) => {
     setSelectedLeagues(prev => {
@@ -200,28 +297,19 @@ export default function TopTips({ onAddMatch }: Props) {
     });
   };
 
-  useEffect(() => { load(); }, [load]);
+  // Stratégia váltáskor: cache törlés, majd újratöltés
+  const prevStrategyRef = useRef<string>(strategy);
+  useEffect(() => {
+    if (prevStrategyRef.current === strategy) { load(); return; }
+    prevStrategyRef.current = strategy;
+    clearServerCache().finally(() => load());
+  }, [load]); // load változik ha strategy változik → ez fut le
 
   useEffect(() => {
     if (!autoRefresh) return;
     const id = setInterval(load, 60_000);
     return () => clearInterval(id);
   }, [autoRefresh, load]);
-
-  const applyPreset = (p: TipFilterPreset) => {
-    const leagues = p.league ? new Set([p.league]) : new Set<string>();
-    setSelectedLeagues(leagues);
-    setFilter(p.filter);
-    setLimit(p.limit);
-  };
-
-  const saveCurrentAsPreset = () => {
-    if (!presetName.trim()) return;
-    const leagueStr = selectedLeagues.size === 1 ? Array.from(selectedLeagues)[0] : '';
-    addPreset({ name: presetName.trim(), league: leagueStr, filter, limit });
-    setPresetName('');
-    setShowPresetForm(false);
-  };
 
   const addTip = (tip: TopTip) => {
     const liga = tip.league === 'GT Leagues' ? 'GT Leagues' as const
@@ -292,7 +380,7 @@ export default function TopTips({ onAddMatch }: Props) {
           betType: autoBetType,
           betLine: tip.ouLine > 0 ? tip.ouLine : undefined,
           odds: autoOdds,
-          stake: 2000,
+          stake: globalStake,
         };
         
         try {
@@ -365,213 +453,106 @@ export default function TopTips({ onAddMatch }: Props) {
   return (
     <div className="flex gap-10">
       <div className="flex-1 space-y-6">
-        {/* Controls */}
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Liga gombok */}
+        {/* Intraday Trend Widget */}
+        <TrendWidget />
+
+        {/* Controls — two-column: filters left, tall Frissítés right */}
+        <div className="flex gap-3 items-stretch">
+          <div className="flex-1 flex flex-col gap-2">
+
+          {/* Felső sor: Liga gombok */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400">Ligák:</span>
-            <button
-              onClick={() => toggleLeague('GT Leagues')}
-              className={`text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition ${
-                selectedLeagues.has('GT Leagues')
-                  ? 'bg-green/20 text-green border-2 border-green'
-                  : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover border border-dark-border'
-              }`}
-            >
+            <button onClick={() => toggleLeague('GT Leagues')}
+              className={`text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition ${selectedLeagues.has('GT Leagues') ? 'bg-green/20 text-green border-2 border-green' : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover border border-dark-border'}`}>
               GT Leagues (12p)
             </button>
-            <button
-              onClick={() => toggleLeague('Esoccer Battle')}
-              className={`text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition ${
-                selectedLeagues.has('Esoccer Battle')
-                  ? 'bg-yellow/20 text-yellow border-2 border-yellow'
-                  : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover border border-dark-border'
-              }`}
-            >
-              Esoccer Battle (8p)
-            </button>
-            <button
-              onClick={() => toggleLeague('Cyber Live Arena')}
-              className={`text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition ${
-                selectedLeagues.has('Cyber Live Arena')
-                  ? 'bg-purple/20 text-purple border-2 border-purple'
-                  : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover border border-dark-border'
-              }`}
-            >
-              Cyber Live Arena (10p)
-            </button>
-            <button
-              onClick={() => toggleLeague('Esoccer H2H GG League')}
-              className={`text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition ${
-                selectedLeagues.has('Esoccer H2H GG League')
-                  ? 'bg-orange-500/20 text-orange-400 border-2 border-orange-400'
-                  : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover border border-dark-border'
-              }`}
-            >
+            <button onClick={() => toggleLeague('Esoccer H2H GG League')}
+              className={`text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition ${selectedLeagues.has('Esoccer H2H GG League') ? 'bg-orange-500/20 text-orange-400 border-2 border-orange-400' : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover border border-dark-border'}`}>
               H2H GG League (8p)
             </button>
+            <button onClick={() => toggleLeague('Cyber Live Arena')}
+              className={`text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition ${selectedLeagues.has('Cyber Live Arena') ? 'bg-purple/20 text-purple border-2 border-purple' : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover border border-dark-border'}`}>
+              Cyber Live Arena (10p)
+            </button>
+            <button onClick={() => toggleLeague('Esoccer Battle')}
+              className={`text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition ${selectedLeagues.has('Esoccer Battle') ? 'bg-yellow/20 text-yellow border-2 border-yellow' : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover border border-dark-border'}`}>
+              Esoccer Battle (8p)
+            </button>
+            <button onClick={() => toggleLeague('Esports Volta')}
+              className={`text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition ${selectedLeagues.has('Esports Volta') ? 'bg-cyan-500/20 text-cyan-400 border-2 border-cyan-400' : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover border border-dark-border'}`}>
+              Esports Volta (6p)
+            </button>
           </div>
 
-          {/* ========== ÚJ: STRATEGY VÁLASZTÓ ========== */}
+          {/* Középső sor: Strategy + Tét */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400">Stratégia:</span>
-            <select
-              value={strategy}
-              onChange={e => setStrategy(e.target.value as 'A' | 'B')}
-              className="bg-dark-bg border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-accent"
-            >
-              <option value="A">Strategy A (Original)</option>
-              <option value="B">Strategy B (Enhanced 🏆)</option>
-            </select>
+            {(['A', 'B', 'C'] as const).map(s => (
+              <button key={s} onClick={() => setStrategy(s)}
+                className={`text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition ${
+                  strategy === s
+                    ? s === 'C'
+                      ? 'bg-cyan-500/20 text-cyan-300 border-2 border-cyan-400'
+                      : 'bg-accent/20 text-accent-light border-2 border-accent'
+                    : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover border border-dark-border'
+                }`}>
+                {s === 'A' ? 'Strategy A' : s === 'B' ? 'Strategy B' : '✦ Strategy C'}
+              </button>
+            ))}
+            <span className="w-px h-4 bg-dark-border mx-1" />
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-slate-400 font-semibold">Tét:</span>
+              <input
+                type="number"
+                step="500"
+                min="100"
+                value={globalStake}
+                onChange={e => setGlobalStake(Math.max(100, parseInt(e.target.value) || 2000))}
+                className="w-24 bg-dark-bg border border-dark-border rounded px-2 py-1 text-xs text-white font-mono text-right focus:outline-none focus:border-accent"
+              />
+              <span className="text-xs text-slate-500">Ft</span>
+            </div>
           </div>
-          {/* ========== END STRATEGY ========== */}
 
-          <select
-            value={limit}
-            onChange={e => setLimit(+e.target.value)}
-            className="bg-dark-bg border border-dark-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-accent"
-          >
-            <option value={5}>Top 5</option>
-            <option value={10}>Top 10</option>
-            <option value={20}>Top 20</option>
-          </select>
-          <button
-            onClick={load}
-            disabled={loading}
-            className="bg-accent/20 text-accent-light hover:bg-accent/30 text-xs font-semibold px-4 py-1.5 rounded-lg cursor-pointer disabled:opacity-50"
-          >
-            {loading ? 'Keresés...' : 'Frissítés'}
-          </button>
-
-          <label className="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer">
-            <input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} className="accent-accent" />
-            Auto (60s)
-          </label>
-
-          <button
-            onClick={toggleSound}
-            className="text-xs text-slate-400 hover:text-white cursor-pointer"
-            title={soundEnabled ? 'Hang ki' : 'Hang be'}
-          >
-            {soundEnabled ? '🔔' : '🔕'}
-          </button>
-
-          {browserNotifEnabled ? (
-            <button
-              onClick={disableBrowserNotif}
-              className="text-xs text-green hover:text-white cursor-pointer"
-              title="Böngésző értesítés ki"
-            >
-              🖥️✅
-            </button>
-          ) : (
-            <button
-              onClick={enableBrowserNotif}
-              className="text-xs text-slate-400 hover:text-white cursor-pointer"
-              title="Böngésző értesítés be"
-            >
-              🖥️
-            </button>
-          )}
-        </div>
-
-        {/* Filters + Rendezés */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-xs text-slate-400">Presets:</span>
-          <button
-            onClick={() => setFilter('all')}
-            className={`text-xs px-3 py-1 rounded-lg font-semibold cursor-pointer ${filter === 'all' ? 'bg-accent text-white' : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover'}`}
-          >
-            Összes
-          </button>
-          <button
-            onClick={() => setFilter('strong')}
-            className={`text-xs px-3 py-1 rounded-lg font-semibold cursor-pointer ${filter === 'strong' ? 'bg-green text-white' : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover'}`}
-          >
-            Csak STRONG
-          </button>
-          <button
-            onClick={() => setFilter('h2h')}
-            className={`text-xs px-3 py-1 rounded-lg font-semibold cursor-pointer ${filter === 'h2h' ? 'bg-accent text-white' : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover'}`}
-          >
-            H2H ONLY
-          </button>
-          <button
-            onClick={() => setFilter('liveOdds')}
-            className={`text-xs px-3 py-1 rounded-lg font-semibold cursor-pointer ${filter === 'liveOdds' ? 'bg-purple text-white' : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover'}`}
-          >
-            LIVE ODDS
-          </button>
-
-          <div className="ml-4 flex items-center gap-2">
-            <span className="text-xs text-slate-400">Rendezés:</span>
-            <button
-              onClick={() => setSortMode('time')}
-              className={`text-xs px-3 py-1 rounded-lg font-semibold cursor-pointer ${sortMode === 'time' ? 'bg-accent text-white' : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover'}`}
-            >
+          {/* Alsó sor: Top N + Rendezés + checkboxok */}
+          <div className="flex items-center gap-2">
+            {[5, 10, 15, 20].map(n => (
+              <button key={n} onClick={() => setLimit(n)}
+                className={`text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition ${limit === n ? 'bg-accent/20 text-accent-light border-2 border-accent' : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover border border-dark-border'}`}>
+                Top {n}
+              </button>
+            ))}
+            <span className="w-px h-4 bg-dark-border mx-1" />
+            <button onClick={() => setSortMode('time')}
+              className={`text-xs px-3 py-1 rounded-lg font-semibold cursor-pointer ${sortMode === 'time' ? 'bg-accent text-white' : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover'}`}>
               🕐 Idő szerint
             </button>
-            <button
-              onClick={() => setSortMode('probability')}
-              className={`text-xs px-3 py-1 rounded-lg font-semibold cursor-pointer ${sortMode === 'probability' ? 'bg-accent text-white' : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover'}`}
-            >
+            <button onClick={() => setSortMode('probability')}
+              className={`text-xs px-3 py-1 rounded-lg font-semibold cursor-pointer ${sortMode === 'probability' ? 'bg-accent text-white' : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover'}`}>
               📊 Esély szerint
             </button>
+            <span className="w-px h-4 bg-dark-border mx-1" />
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white cursor-pointer transition">
+              <input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} className="accent-accent w-3.5 h-3.5" />
+              Auto (60s)
+            </label>
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white cursor-pointer transition">
+              <input type="checkbox" checked={soundEnabled} onChange={toggleSound} className="accent-accent w-3.5 h-3.5" />
+              Hang
+            </label>
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white cursor-pointer transition">
+              <input type="checkbox" checked={browserNotifEnabled} onChange={e => e.target.checked ? enableBrowserNotif() : disableBrowserNotif()} className="accent-accent w-3.5 h-3.5" />
+              Értesítés
+            </label>
           </div>
 
-          <button
-            onClick={() => setShowPresetForm(!showPresetForm)}
-            className="text-xs px-3 py-1 rounded-lg font-semibold bg-dark-card text-accent-light hover:bg-dark-card-hover cursor-pointer"
-          >
-            + Mentés
+          </div>{/* end left flex-col */}
+
+          {/* Tall Frissítés button */}
+          <button onClick={load} disabled={loading}
+            className="self-stretch px-6 rounded-xl bg-accent/20 text-accent-light hover:bg-accent/30 font-semibold text-sm tracking-wide cursor-pointer disabled:opacity-50 transition border border-accent/30 min-w-[110px]">
+            {loading ? '⏳ Keresés...' : '🔄 Frissítés'}
           </button>
-        </div>
-
-        {showPresetForm && (
-          <div className="flex items-center gap-2 bg-dark-card border border-dark-border rounded-lg p-3">
-            <input
-              type="text"
-              value={presetName}
-              onChange={e => setPresetName(e.target.value)}
-              placeholder="Preset neve..."
-              className="flex-1 bg-dark-bg border border-dark-border rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-accent"
-            />
-            <button
-              onClick={saveCurrentAsPreset}
-              className="bg-accent/20 text-accent-light hover:bg-accent/30 text-xs font-semibold px-3 py-1 rounded cursor-pointer"
-            >
-              Mentés
-            </button>
-            <button
-              onClick={() => setShowPresetForm(false)}
-              className="text-xs text-slate-400 hover:text-white cursor-pointer"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-
-        {presets.length > 0 && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-slate-500">Mentett:</span>
-            {presets.map(p => (
-              <div key={p.name} className="flex items-center gap-1 bg-dark-card border border-dark-border rounded-lg px-2 py-1">
-                <button
-                  onClick={() => applyPreset(p)}
-                  className="text-xs text-accent-light hover:text-white cursor-pointer"
-                >
-                  {p.name}
-                </button>
-                <button
-                  onClick={() => removePreset(p.name)}
-                  className="text-xs text-red hover:text-white cursor-pointer"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+        </div>{/* end two-column wrapper */}
 
         {error && <p className="text-red text-sm">{error}</p>}
 
@@ -579,12 +560,18 @@ export default function TopTips({ onAddMatch }: Props) {
         {(() => {
           if (!data) return null;
           
-          let tips = (() => {
-            if (filter === 'strong') return data.tips.filter(t => t.category === 'STRONG_BET');
-            if (filter === 'h2h') return data.tips.filter(t => t.h2hMode);
-            if (filter === 'liveOdds') return data.tips.filter(t => t.oddsSource === 'bet365' || t.oddsSource === 'vegas.hu');
-            return data.tips;
-          })();
+          // Percek a most-tól (éjféli átfordulást kezelve)
+          const minutesFromNow = (t: string) => {
+            const [h, m] = t.split(':').map(Number);
+            const matchMins = h * 60 + m;
+            const now = new Date();
+            const nowMins = now.getHours() * 60 + now.getMinutes();
+            let diff = matchMins - nowMins;
+            if (diff < -120) diff += 1440; // éjféli átfordulás: ha >2 órával a múltban, akkor holnap
+            return diff;
+          };
+
+          let tips = [...data.tips];
 
           if (selectedLeagues.size > 0) {
             tips = tips.filter(tip => selectedLeagues.has(tip.league));
@@ -592,8 +579,16 @@ export default function TopTips({ onAddMatch }: Props) {
 
           tips = tips.filter(tip => !checkedRed.has(getMatchId(tip)));
 
+          // Több liga esetén: csak a következő 45 perc meccseit mutassa
+          if (selectedLeagues.size >= 2) {
+            tips = tips.filter(tip => {
+              const diff = minutesFromNow(tip.time);
+              return diff >= -5 && diff <= 45;
+            });
+          }
+
           if (sortMode === 'time') {
-            tips = [...tips].sort((a, b) => a.time.localeCompare(b.time));
+            tips = [...tips].sort((a, b) => minutesFromNow(a.time) - minutesFromNow(b.time));
           } else {
             tips = [...tips].sort((a, b) => {
               const maxA = Math.max(a.winEselyA, a.winEselyB);
@@ -613,21 +608,32 @@ export default function TopTips({ onAddMatch }: Props) {
                 const isChecked = isGreen || isRed;
                 const isHighWin = hasHighWinChance(tip);
 
-                const cardOpacity = isChecked ? 'opacity-50' : 'opacity-100';
+                const isTrendGreen = checkedMatches.some(m =>
+                  m.fromTrend &&
+                  m.tip.playerA?.toLowerCase() === tip.playerA?.toLowerCase() &&
+                  m.tip.playerB?.toLowerCase() === tip.playerB?.toLowerCase()
+                );
+                const cardOpacity = isChecked ? 'opacity-50' : isTrendGreen ? 'opacity-60' : 'opacity-100';
                 const hasGolValue = tip.ouLine > 0
                   && Math.abs(tip.vartGol - tip.ouLine) >= 0.6
                   && tip.oddsSource === 'vegas.hu';
-                const cardBorder = hasGolValue && !isChecked ? 'border-green'
-                  : isHighWin && !isChecked ? 'border-yellow-500'
+                // bordó mindig prioritás — felülírja a zöld/sárga keretet
+                const cardBorder = isTrendGreen ? 'border-red-600'
+                  : isChecked ? 'border-dark-border'
+                  : hasGolValue ? 'border-green'
+                  : isHighWin ? 'border-yellow-500'
                   : 'border-dark-border';
-                const cardGlow = hasGolValue && !isChecked ? 'shadow-[0_0_12px_rgba(34,197,94,0.4)]'
+                const cardGlow = isTrendGreen ? 'shadow-[0_0_18px_rgba(220,38,38,0.55)]'
+                  : hasGolValue && !isChecked ? 'shadow-[0_0_12px_rgba(34,197,94,0.4)]'
                   : isHighWin && !isChecked ? 'shadow-yellow-glow'
                   : '';
-                // O/U tip is primary; win tip only when no O/U line
+                // O/U tip is primary; win tip only when no O/U line; n/a while waiting for real odds
                 const ouDir = tip.vartGol > tip.ouLine ? 'OVER' : 'UNDER';
-                const displayTip = tip.ouLine > 0
-                  ? `${ouDir} ${tip.ouLine}`
-                  : tip.valueBet;
+                const displayTip = tip.oddsSource === 'n/a'
+                  ? 'Várakozás...'
+                  : tip.ouLine > 0
+                    ? `${ouDir} ${tip.ouLine}`
+                    : tip.valueBet;
 
                 return (
                   <div
@@ -637,24 +643,31 @@ export default function TopTips({ onAddMatch }: Props) {
                     <div className="flex items-center gap-4 px-5 py-3 bg-dark-bg/40 border-b border-dark-border">
                       <span className="text-xs font-bold text-slate-500 w-6 shrink-0">#{idx + 1}</span>
                       <div className={`px-2 py-1 rounded text-[10px] font-bold ${leagueBadge(tip.league)}`}>
-                        {tip.league === 'GT Leagues' ? 'GT' : tip.league === 'Esoccer Battle' ? 'EB' : tip.league === 'Cyber Live Arena' ? 'CLA' : tip.league === 'Esoccer H2H GG League' ? 'H2H' : 'EV'}
+                        {tip.league === 'GT Leagues' ? 'GT' : tip.league === 'Esoccer Battle' ? 'EB' : tip.league === 'Cyber Live Arena' ? 'CLA' : tip.league === 'Esoccer H2H GG League' ? 'H2H' : tip.league === 'Esports Volta' ? 'VOLTA' : 'EV'}
                       </div>
 
                       <span className="text-sm text-white font-mono font-bold whitespace-nowrap">{tip.time}</span>
-                      <span className={`text-sm font-semibold whitespace-nowrap ${tip.oddsSource === 'vegas.hu' ? 'text-green-400' : tip.oddsSource === 'bet365' ? 'text-blue-400' : 'text-accent-light'}`}>
-                        O/U {tip.ouLine}
-                        {tip.oddsSource === 'vegas.hu' && (
-                          <>
-                            <span className="ml-1 text-[10px] text-green-500">vegas</span>
-                            {tip.oddsOver && tip.oddsOver > 1 && (
-                              <span className="ml-2 text-[11px] font-mono text-green-400">
-                                ↑{tip.oddsOver.toFixed(2)} ↓{(tip.oddsUnder ?? 0).toFixed(2)}
-                              </span>
-                            )}
-                          </>
-                        )}
-                        {tip.oddsSource === 'bet365' && <span className="ml-1 text-[10px] text-blue-500">b365</span>}
-                      </span>
+                      {tip.oddsSource === 'n/a' ? (
+                        <span className="text-sm font-semibold whitespace-nowrap text-slate-500 italic">
+                          O/U <span className="text-slate-400">n/a</span>
+                          <span className="ml-1 text-[10px] text-slate-600">várakozás...</span>
+                        </span>
+                      ) : (
+                        <span className={`text-sm font-semibold whitespace-nowrap ${tip.oddsSource === 'vegas.hu' ? 'text-green-400' : tip.oddsSource === 'bet365' ? 'text-blue-400' : 'text-accent-light'}`}>
+                          O/U {tip.ouLine}
+                          {tip.oddsSource === 'vegas.hu' && (
+                            <>
+                              <span className="ml-1 text-[10px] text-green-500">vegas</span>
+                              {tip.oddsOver && tip.oddsOver > 1 && (
+                                <span className="ml-2 text-[11px] font-mono text-green-400">
+                                  ↑{tip.oddsOver.toFixed(2)} ↓{(tip.oddsUnder ?? 0).toFixed(2)}
+                                </span>
+                              )}
+                            </>
+                          )}
+                          {tip.oddsSource === 'bet365' && <span className="ml-1 text-[10px] text-blue-500">b365</span>}
+                        </span>
+                      )}
                       <span className={`text-sm whitespace-nowrap ${hasGolValue ? 'border border-green rounded px-2 py-0.5' : ''}`}>
                         <span className="text-slate-400">GÓL </span>
                         <span className={`font-semibold ${hasGolValue ? 'text-green' : 'text-white'}`}>{tip.vartGol.toFixed(1)}</span>
@@ -691,7 +704,7 @@ export default function TopTips({ onAddMatch }: Props) {
                             <p className={`text-sm font-bold ${hasGolValue ? 'text-green' : tip.ouLine > 0 ? 'text-accent-light' : 'text-white'}`}>{displayTip}</p>
                           </div>
                           <span className="text-xs text-accent-light font-semibold bg-accent/10 px-2 py-0.5 rounded">
-                            💰 2 000 Ft
+                            💰 {globalStake.toLocaleString('hu-HU')} Ft
                           </span>
                         </div>
                         
@@ -870,17 +883,18 @@ export default function TopTips({ onAddMatch }: Props) {
 
         {data && (
           <p className="text-[10px] text-slate-600 text-center">
-            Generálva: {new Date(data.generated).toLocaleString('hu-HU')} | 
+            Generálva: {new Date(data.generated).toLocaleString('hu-HU')} |
             {data.strategy && ` Stratégia: ${data.strategy.name} |`} Modell: H2H-first + Poisson + ELO
           </p>
         )}
+
       </div>
 
       {/* NAPLÓ */}
       <div className="w-[420px] shrink-0">
         <div className="bg-dark-card border border-dark-border rounded-xl p-4 sticky top-4">
           <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-            ✅ Megtett meccsek ({checkedMatches.length})
+            ✅ Mérkőzés Lista ({checkedMatches.length})
           </h3>
           
           {checkedMatches.length === 0 ? (
@@ -890,21 +904,44 @@ export default function TopTips({ onAddMatch }: Props) {
               {checkedMatches
                 .filter(match => match && match.tip)
                 .sort((a, b) => b.timestamp - a.timestamp)
-                .map((match, idx) => (
+                .map((match, idx) => {
+                  const live = findLiveScore(match.tip.playerA, match.tip.playerB, match.timestamp);
+                  return (
                   <div
                     key={idx}
-                    className="bg-dark-bg/40 border border-dark-border rounded-lg p-3"
+                    className={`border rounded-lg p-2.5 transition-all ${
+                      live?.isLive
+                        ? 'bg-green/5 border-green/30'
+                        : match.trendType === 'VALUE'
+                          ? 'bg-yellow-400/5 border-yellow-400/40'
+                          : match.trendType === 'TREND'
+                            ? 'bg-orange-500/5 border-orange-500/40'
+                            : 'bg-dark-bg/40 border-dark-border'
+                    }`}
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2 text-xs flex-1">
-                        <span className="text-slate-500 font-bold w-7 shrink-0">#{idx + 1}</span>
-                        <span className="text-slate-400 font-mono">{match.tip.time || '—'}</span>
-                        <span className="text-slate-600">|</span>
-                        <span className="text-white font-semibold">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-1.5 text-xs flex-1 min-w-0">
+                        <span className="text-slate-500 font-bold shrink-0">#{idx + 1}</span>
+                        {match.trendType === 'VALUE' && (
+                          <span style={{backgroundColor:'#facc15',color:'#111827'}} className="px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0">
+                            💰 VALUE
+                          </span>
+                        )}
+                        {match.trendType === 'TREND' && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 bg-orange-500 text-white">
+                            🚀 TREND
+                          </span>
+                        )}
+                        {match.tip.league && (
+                          <span className={`px-1 py-0.5 rounded text-[9px] font-bold shrink-0 ${leagueBadge(match.tip.league)}`}>
+                            {leagueAbbr(match.tip.league)}
+                          </span>
+                        )}
+                        <span className="text-slate-400 font-mono shrink-0">{match.tip.time || '—'}</span>
+                        <span className="text-white font-semibold truncate">
                           {match.tip.playerA || '?'} vs {match.tip.playerB || '?'}
                         </span>
-                        <span className="text-slate-600">|</span>
-                        <span className="text-slate-400">
+                        <span className="text-slate-400 shrink-0">
                           GÓL <span className={`font-semibold ${match.tip.ouLine > 0 && Math.abs((match.tip.vartGol || 0) - match.tip.ouLine) >= 0.6 ? 'text-green border border-green rounded px-1' : 'text-accent-light'}`}>{match.tip.vartGol?.toFixed(1) || '—'}</span>
                         </span>
                       </div>
@@ -963,9 +1000,9 @@ export default function TopTips({ onAddMatch }: Props) {
                         type="number"
                         step="100"
                         min="100"
-                        placeholder="2000"
-                        value={match.stake ?? 2000}
-                        onChange={e => updateJournalEntry(match.matchId, 'stake', e.target.value ? parseFloat(e.target.value) : 2000)}
+                        placeholder={String(globalStake)}
+                        value={match.stake ?? globalStake}
+                        onChange={e => updateJournalEntry(match.matchId, 'stake', e.target.value ? parseFloat(e.target.value) : globalStake)}
                         className="bg-dark-bg border border-dark-border rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-accent placeholder-slate-600"
                       />
 
@@ -980,24 +1017,59 @@ export default function TopTips({ onAddMatch }: Props) {
                       </select>
                     </div>
 
-                    {(match.betType || match.betLine || match.result) && (
-                      <div className="mt-2 pt-2 border-t border-dark-border">
-                        <p className="text-xs text-slate-400">
+                    {/* Fogadás összefoglaló + Live score + Win/Loss */}
+                    {(() => {
+                      // Projected outcome az aktuális score alapján
+                      const projected = (() => {
+                        if (!live || !match.betType || !match.betLine) return null;
+                        const total = live.scoreA + live.scoreB;
+                        if (match.betType === 'Over')  return total > match.betLine  ? 'Win' : 'Loss';
+                        if (match.betType === 'Under') return total < match.betLine  ? 'Win' : 'Loss';
+                        return null;
+                      })();
+                      const showBetLine = match.betType || match.betLine || match.result || live;
+                      if (!showBetLine) return null;
+                      return (
+                        <div className="mt-2 pt-2 border-t border-dark-border flex items-center gap-2 flex-wrap">
                           {match.betType && match.betLine && (
-                            <span className="text-accent-light font-semibold">
+                            <span className="text-accent-light font-semibold text-xs">
                               {match.betType} {match.betLine}
                             </span>
                           )}
-                          {match.result && (
-                            <span className={`ml-2 font-semibold ${match.result === 'Win' ? 'text-green' : 'text-red'}`}>
-                              {match.result === 'Win' ? '✅' : '❌'} {match.result}
+                          {/* Score: live folyamán vagy rögzített eredmény */}
+                          {live && (
+                            <span className="font-mono font-bold text-base text-green tracking-wider">
+                              {live.scoreA}:{live.scoreB}
                             </span>
                           )}
-                        </p>
-                      </div>
-                    )}
+                          {/* Live idő jelző */}
+                          {live?.isLive && (
+                            <span className="flex items-center gap-1 text-[10px] text-white">
+                              {live.periodName && <span className="font-semibold">{live.periodName}</span>}
+                              {live.minute !== null && <span className="font-bold">{live.minute}'</span>}
+                              <span className="text-[10px] font-bold text-green animate-pulse border border-green rounded px-1 py-px">Live</span>
+                            </span>
+                          )}
+                          {/* Végleges eredmény (manuális vagy auto) */}
+                          {match.result ? (
+                            <span className={`font-semibold text-xs flex items-center gap-1 ${match.result === 'Win' ? 'text-green' : 'text-red'}`}>
+                              {match.result === 'Win' ? '✅' : '❌'} {match.result}
+                              {match.finalScore && !live && (
+                                <span className="font-mono font-bold text-sm tracking-wider">{match.finalScore}</span>
+                              )}
+                            </span>
+                          ) : projected ? (
+                            /* Projected (live folyamán) */
+                            <span className={`text-xs font-semibold opacity-60 ${projected === 'Win' ? 'text-green' : 'text-red'}`}>
+                              {projected}
+                            </span>
+                          ) : null}
+                        </div>
+                      );
+                    })()}
                   </div>
-                ))}
+                  );
+                })}
             </div>
           )}
         </div>

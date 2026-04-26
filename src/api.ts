@@ -193,7 +193,7 @@ export interface TopTipsResponse {
 }
 
 // ========== MÓDOSÍTOTT fetchTopTips - STRATEGY PARAMÉTERREL ==========
-export async function fetchTopTips(league?: string, limit: number = 5, strategy: 'A' | 'B' = 'B'): Promise<TopTipsResponse> {
+export async function fetchTopTips(league?: string, limit: number = 5, strategy: 'A' | 'B' | 'C' = 'B'): Promise<TopTipsResponse> {
   const params = new URLSearchParams();
   if (league) params.set('league', league);
   params.set('limit', String(limit));
@@ -332,6 +332,68 @@ export async function runOptimize(player: string, league: string): Promise<Optim
 
 export async function fetchH2HDetail(playerA: string, playerB: string, league: string): Promise<H2HDetail> {
   const res = await fetch(`${API_BASE}/h2h/${encodeURIComponent(playerA)}/${encodeURIComponent(playerB)}?league=${encodeURIComponent(league)}`);
+  if (!res.ok) throw new Error(`Hiba: ${res.status}`);
+  return res.json();
+}
+
+export interface LiveScore {
+  playerA: string;
+  playerB: string;
+  scoreA: number;
+  scoreB: number;
+  minute: number | null;
+  period: number | null;
+  periodName: string | null;
+  isLive: boolean;
+  source: 'altenar';
+}
+
+export async function fetchLiveScores(): Promise<LiveScore[]> {
+  const res = await fetch(`${API_BASE}/live-scores`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function clearServerCache(): Promise<{ cleared: number }> {
+  const res = await fetch(`${API_BASE}/cache/clear`, { method: 'POST' });
+  if (!res.ok) return { cleared: 0 };
+  return res.json();
+}
+
+export interface TrendSignal {
+  playerA: string;
+  playerB: string;
+  league: string;
+  nextMatchTime: string;
+  minutesUntil: number;
+  todayH2H: Array<{ time: string; goalsA: number; goalsB: number; total: number }>;
+  trendSlope: number;
+  avgTotalGoals: number;
+  ouLine: number;
+  oddsOver?: number;
+  aboveLinePct: number;
+  aboveLineCount: number;
+  lastTwoAboveLine: boolean;
+  signalStrength: 'VALUE' | 'TREND';
+}
+
+export interface TrendScannerStatus {
+  lastRun: number;
+  lastRunISO: string | null;
+  lastSignalCount: number;
+  pushedCount: number;
+  errors: number;
+  isRunning: boolean;
+}
+
+export async function getTrendStatus(): Promise<TrendScannerStatus> {
+  const res = await fetch(`${API_BASE}/trend/status`);
+  if (!res.ok) throw new Error(`Hiba: ${res.status}`);
+  return res.json();
+}
+
+export async function triggerTrendScan(): Promise<{ ran: boolean; signalsFound: number; pushed: number; signals: TrendSignal[] }> {
+  const res = await fetch(`${API_BASE}/trend/run`, { method: 'POST' });
   if (!res.ok) throw new Error(`Hiba: ${res.status}`);
   return res.json();
 }

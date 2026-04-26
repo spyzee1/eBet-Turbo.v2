@@ -1,4 +1,4 @@
-# eBet-Turbo v1
+# eBet-Turbo v2
 
 # Az eredeti eBet átszabott változata.
 # Live meccselőzmények

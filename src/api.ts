@@ -398,6 +398,54 @@ export async function triggerTrendScan(): Promise<{ ran: boolean; signalsFound: 
   return res.json();
 }
 
+export interface ResolveMatch {
+  matchId: string;
+  playerA: string;
+  playerB: string;
+  league: string;
+  timestamp: number;
+  betType: string;
+  betLine: number;
+}
+
+export interface ResolveResult {
+  matchId: string;
+  pending: boolean;
+  score?: string;
+  total?: number;
+  outcome?: 'Win' | 'Loss' | null;
+}
+
+export async function resolveResults(matches: ResolveMatch[]): Promise<ResolveResult[]> {
+  try {
+    const res = await fetch(`${API_BASE}/resolve-results`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ matches }),
+    });
+    if (!res.ok) return matches.map(m => ({ matchId: m.matchId, pending: true }));
+    return res.json();
+  } catch { return matches.map(m => ({ matchId: m.matchId, pending: true })); }
+}
+
+export async function fetchJournal(): Promise<any[]> {
+  try {
+    const res = await fetch(`${API_BASE}/journal`);
+    if (!res.ok) return [];
+    return res.json();
+  } catch { return []; }
+}
+
+export async function saveJournal(entries: any[]): Promise<void> {
+  try {
+    await fetch(`${API_BASE}/journal`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entries),
+    });
+  } catch { /* silent */ }
+}
+
 export async function autoCheckResults(matches: AutoCheckMatch[]): Promise<AutoCheckResult[]> {
   const res = await fetch(`${API_BASE}/auto-check`, {
     method: 'POST',

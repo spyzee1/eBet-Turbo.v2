@@ -1893,7 +1893,143 @@ app.get('/api/tc/schedule/:league', async (req, res) => {
     res.status(500).json({ error: e instanceof Error ? e.message : 'Unknown error' });
   }
 });
-// ============ VÉGÜK ============  
+// ============ RESULT RESOLVER — esoccerbet.org ============
+const MATCH_DURATION_MIN: Record<string, number> = {
+  'GT Leagues': 12,
+  'Cyber Live Arena': 10,
+  'Esoccer Battle': 8,
+  'Esports Volta': 6,
+  'Esoccer H2H GG League': 8,
+};
+
+function fuzzyNameMatch(a: string, b: string): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const nA = norm(a);
+  const nB = norm(b);
+  if (nA === nB) return true;
+  const short = nA.length < nB.length ? nA : nB;
+  const long  = nA.length < nB.length ? nB : nA;
+  return long.includes(short.slice(0, Math.min(6, short.length)));
+}
+
+function parseDateToMs(dateStr: string, refTimestamp: number): number | null {
+  // Formats seen: "04/26 14:30", "14:30", "04/26"
+  const parts = dateStr.trim().split(/\s+/);
+  const ref = new Date(refTimestamp);
+  const year = ref.getFullYear();
+
+  if (parts.length === 2) {
+    // "MM/DD HH:MM"
+    const [md, hm] = parts;
+    const [mo, dy] = md.split('/').map(Number);
+    const [hh, mm] = hm.split(':').map(Number);
+    return new Date(year, mo - 1, dy, hh, mm).getTime();
+  }
+  if (parts.length === 1) {
+    if (parts[0].includes('/')) {
+      // "MM/DD"
+      const [mo, dy] = parts[0].split('/').map(Number);
+      return new Date(year, mo - 1, dy, ref.getHours(), ref.getMinutes()).getTime();
+    }
+    if (parts[0].includes(':')) {
+      // "HH:MM" — assume same day
+      const [hh, mm] = parts[0].split(':').map(Number);
+      return new Date(year, ref.getMonth(), ref.getDate(), hh, mm).getTime();
+    }
+  }
+  return null;
+}
+
+app.post('/api/resolve-results', async (req, res) => {
+  try {
+    const { matches } = req.body as {
+      matches: {
+        matchId: string;
+        playerA: string;
+        playerB: string;
+        league: string;
+        timestamp: number;
+        betType: string;
+        betLine: number;
+      }[];
+    };
+
+    const results = await Promise.all(matches.map(async (m) => {
+      try {
+        const duration = MATCH_DURATION_MIN[m.league] ?? 10;
+        const matchEndMs = m.timestamp + (duration + 3) * 60 * 1000;
+        if (Date.now() < matchEndMs + 5000) {
+          return { matchId: m.matchId, pending: true };
+        }
+
+        // Fresh scrape — no cache so we always get the latest results
+        const playerResults = await scrapePlayerResults(m.playerA, m.league);
+
+        // Find the specific match: fuzzy opponent name + date proximity (±30 min)
+        const found = playerResults.find(r => {
+          if (!fuzzyNameMatch(r.opponent, m.playerB)) return false;
+          const rMs = parseDateToMs(r.date, m.timestamp);
+          if (rMs === null) return true; // no date info → accept name match
+          return Math.abs(rMs - m.timestamp) < 30 * 60 * 1000;
+        });
+
+        if (!found) {
+          // Fallback: try scraping from playerB's perspective
+          const playerBResults = await scrapePlayerResults(m.playerB, m.league);
+          const foundB = playerBResults.find(r => {
+            if (!fuzzyNameMatch(r.opponent, m.playerA)) return false;
+            const rMs = parseDateToMs(r.date, m.timestamp);
+            if (rMs === null) return true;
+            return Math.abs(rMs - m.timestamp) < 30 * 60 * 1000;
+          });
+          if (!foundB) return { matchId: m.matchId, pending: true };
+
+          // From playerB's perspective: scoreHome=B, scoreAway=A → swap
+          const total = foundB.scoreHome + foundB.scoreAway;
+          const scoreA = foundB.scoreAway;
+          const scoreB = foundB.scoreHome;
+          let outcome: 'Win' | 'Loss' | null = null;
+          if (m.betType === 'Over')  outcome = total > m.betLine ? 'Win' : 'Loss';
+          if (m.betType === 'Under') outcome = total < m.betLine ? 'Win' : 'Loss';
+          return { matchId: m.matchId, score: `${scoreA}:${scoreB}`, total, outcome, pending: false };
+        }
+
+        const total = found.scoreHome + found.scoreAway;
+        let outcome: 'Win' | 'Loss' | null = null;
+        if (m.betType === 'Over')  outcome = total > m.betLine ? 'Win' : 'Loss';
+        if (m.betType === 'Under') outcome = total < m.betLine ? 'Win' : 'Loss';
+        return { matchId: m.matchId, score: `${found.scoreHome}:${found.scoreAway}`, total, outcome, pending: false };
+      } catch {
+        return { matchId: m.matchId, pending: true };
+      }
+    }));
+
+    res.json(results);
+  } catch (e: unknown) {
+    res.status(500).json({ error: e instanceof Error ? e.message : 'Unknown error' });
+  }
+});
+
+// ============ JOURNAL PERSISTENCE ============
+import fs from 'fs';
+const JOURNAL_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), '../data/journal.json');
+if (!fs.existsSync(path.dirname(JOURNAL_FILE))) fs.mkdirSync(path.dirname(JOURNAL_FILE), { recursive: true });
+
+app.get('/api/journal', (_req, res) => {
+  try {
+    if (!fs.existsSync(JOURNAL_FILE)) return res.json([]);
+    res.json(JSON.parse(fs.readFileSync(JOURNAL_FILE, 'utf-8')));
+  } catch { res.json([]); }
+});
+
+app.post('/api/journal', (req, res) => {
+  try {
+    fs.writeFileSync(JOURNAL_FILE, JSON.stringify(req.body, null, 2));
+    res.json({ ok: true });
+  } catch { res.status(500).json({ ok: false }); }
+});
+
+// ============ VÉGÜK ============
 
 app.listen(3005, '0.0.0.0', () => {
   console.log('--- FIGYELEM: EZ A 3005-OS VERZIO ---');

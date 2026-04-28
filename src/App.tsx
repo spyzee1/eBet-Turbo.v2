@@ -20,7 +20,7 @@ import {
   loadHistory, saveHistory, addToHistory,
   HistoryEntry,
 } from './model/store';
-import { autoCheckResults } from './api';
+import { autoCheckResults, resolveResults, fetchJournal, saveJournal } from './api';
 
 type View = 'dashboard' | 'topTips' | 'naplo' | 'upcoming' | 'newMatch' | 'playerProfile' | 'backtest' | 'history' | 'settings' | 'statistics' | 'segedlet';
 
@@ -93,6 +93,85 @@ function App() {
     const interval = setInterval(check, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [history]);
+
+  // ── Journal result validator — runs every 60 s regardless of active tab ──────
+  // Fixes: Volta results missing, results lost on tab switch
+  useEffect(() => {
+    const BETTING_JOURNAL_KEY = 'betting_journal';
+    const CHECKED_GREEN_KEY   = 'checked_green_matches';
+
+    const validate = async () => {
+      try {
+        // Merge server journal with localStorage on first run (persistence fix)
+        const serverJournal = await fetchJournal();
+        if (serverJournal.length > 0) {
+          const localRaw = localStorage.getItem(BETTING_JOURNAL_KEY);
+          const local: any[] = localRaw ? (() => { try { return JSON.parse(localRaw); } catch { return []; } })() : [];
+          if (serverJournal.length > local.length) {
+            const merged = new Map<string, any>();
+            for (const e of local) if (e?.matchId) merged.set(e.matchId, e);
+            for (const e of serverJournal) if (e?.matchId) merged.set(e.matchId, e);
+            const arr = Array.from(merged.values());
+            localStorage.setItem(BETTING_JOURNAL_KEY, JSON.stringify(arr));
+            window.dispatchEvent(new Event('journal-updated'));
+          }
+        }
+
+        // Find pending journal entries that should have a result by now
+        const journal: any[] = (() => {
+          try { return JSON.parse(localStorage.getItem(BETTING_JOURNAL_KEY) || '[]'); } catch { return []; }
+        })();
+
+        const toResolve = journal.filter(m =>
+          !m.result && m.betType && m.betLine != null && m.timestamp &&
+          m.tip?.playerA && m.tip?.playerB
+        );
+        if (toResolve.length === 0) return;
+
+        const resolved = await resolveResults(toResolve.map(m => ({
+          matchId: m.matchId,
+          playerA: m.tip.playerA,
+          playerB: m.tip.playerB,
+          league: m.tip.league || m.tip.liga || 'GT Leagues',
+          timestamp: m.timestamp,
+          betType: m.betType,
+          betLine: m.betLine,
+        })));
+
+        let changed = false;
+        for (const r of resolved) {
+          if (r.pending || !r.outcome) continue;
+          const idx = journal.findIndex((m: any) => m.matchId === r.matchId);
+          if (idx !== -1 && !journal[idx].result) {
+            journal[idx] = { ...journal[idx], result: r.outcome, finalScore: r.score };
+            changed = true;
+            console.log(`✅ Auto-result (esoccerbet): ${journal[idx].tip?.playerA} vs ${journal[idx].tip?.playerB} → ${r.outcome} (${r.score})`);
+          }
+        }
+
+        if (changed) {
+          localStorage.setItem(BETTING_JOURNAL_KEY, JSON.stringify(journal));
+          saveJournal(journal);
+          // Sync checked_green_matches
+          const green: any[] = (() => { try { return JSON.parse(localStorage.getItem(CHECKED_GREEN_KEY) || '[]'); } catch { return []; } })();
+          for (const r of resolved) {
+            if (r.pending || !r.outcome) continue;
+            const gi = green.findIndex((m: any) => m.matchId === r.matchId);
+            if (gi !== -1 && !green[gi].result) {
+              green[gi] = { ...green[gi], result: r.outcome, finalScore: r.score };
+            }
+          }
+          localStorage.setItem(CHECKED_GREEN_KEY, JSON.stringify(green));
+          window.dispatchEvent(new Event('journal-updated'));
+          window.dispatchEvent(new Event('checked-matches-updated'));
+        }
+      } catch { /* silent */ }
+    };
+
+    validate();
+    const id = setInterval(validate, 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const addMatch = useCallback((m: MatchInput) => {
     setMatches(prev => [...prev, m]);

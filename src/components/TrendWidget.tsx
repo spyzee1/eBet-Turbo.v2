@@ -19,7 +19,7 @@ function signalKey(s: TrendSignal) {
   return `trend|${[s.playerA, s.playerB].sort().join('-')}|${s.nextMatchTime}`;
 }
 
-function buildCheckedMatch(sig: TrendSignal) {
+function buildCheckedMatch(sig: TrendSignal, strategy?: 'A' | 'B' | 'C') {
   const today = new Date().toISOString().split('T')[0];
   const fakeTip = {
     playerA: sig.playerA, teamA: sig.playerA,
@@ -51,6 +51,7 @@ function buildCheckedMatch(sig: TrendSignal) {
     betLine: sig.ouLine,
     fromTrend: true,
     trendType: sig.signalStrength,
+    strategy,
     odds: sig.oddsOver,
     trendAboveLinePct: sig.aboveLinePct,
     trendAboveLineCount: sig.aboveLineCount,
@@ -61,10 +62,10 @@ function buildCheckedMatch(sig: TrendSignal) {
   };
 }
 
-function addToGreenList(sig: TrendSignal) {
+function addToGreenList(sig: TrendSignal, strategy?: 'A' | 'B' | 'C') {
   try {
     const key = signalKey(sig);
-    const entry = buildCheckedMatch(sig);
+    const entry = buildCheckedMatch(sig, strategy);
     const stored: any[] = JSON.parse(localStorage.getItem(CHECKED_GREEN_KEY) || '[]');
     if (!stored.some(m => m.matchId === key)) {
       stored.push(entry);
@@ -88,7 +89,7 @@ function removeFromGreenList(sig: TrendSignal) {
   } catch {}
 }
 
-export default function TrendWidget() {
+export default function TrendWidget({ strategy }: { strategy?: 'A' | 'B' | 'C' }) {
   const [signals, setSignals]   = useState<TrendSignal[]>([]);
   const [lastScan, setLastScan] = useState<string | null>(null);
   const [loading, setLoading]   = useState(false);
@@ -127,7 +128,7 @@ export default function TrendWidget() {
       removeFromGreenList(sig);
       setGreenSet(prev => { const n = new Set(prev); n.delete(key); return n; });
     } else {
-      addToGreenList(sig);
+      addToGreenList(sig, strategy);
       setGreenSet(prev => new Set([...prev, key]));
       setRedSet(prev => { const n = new Set(prev); n.delete(key); return n; });
     }

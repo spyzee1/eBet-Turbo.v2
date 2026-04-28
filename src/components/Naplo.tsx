@@ -40,6 +40,7 @@ interface CheckedMatch {
   result?: 'Win' | 'Loss';
   stake?: number;
   odds?: number;
+  strategy?: 'A' | 'B' | 'C';
   fromTrend?: boolean;
   trendType?: 'VALUE' | 'TREND';
   trendAboveLinePct?: number;
@@ -538,6 +539,15 @@ export default function Naplo() {
                               <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 ${leagueBadge(match.tip.league)}`}>
                                 {leagueAbbr(match.tip.league)}
                               </span>
+                            )}
+                            {match.strategy === 'A' && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 bg-emerald-600 text-white">A</span>
+                            )}
+                            {match.strategy === 'B' && (
+                              <span style={{backgroundColor:'#facc15',color:'#111827'}} className="px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0">B</span>
+                            )}
+                            {match.strategy === 'C' && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 bg-orange-500 text-white">C</span>
                             )}
                             {match.fromTrend && match.trendType === 'VALUE' && (
                               <span style={{backgroundColor:'#facc15',color:'#111827'}} className="px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0">

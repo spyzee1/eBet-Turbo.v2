@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { fetchTopTips, TopTip, TopTipsResponse, fetchLiveScores, LiveScore, clearServerCache } from '../api';
+import { fetchTopTips, TopTip, TopTipsResponse, fetchLiveScores, LiveScore, clearServerCache, resolveResults, saveJournal } from '../api';
 import { MatchInput } from '../model/types';
 import H2HModal from './H2HModal';
 import TrendWidget from './TrendWidget';
@@ -242,15 +242,49 @@ export default function TopTips({ onAddMatch }: Props) {
               const finalScore = `${prevScore.scoreA}:${prevScore.scoreB}`;
               const next = { ...m, result: outcome, finalScore };
               updated[idx] = next;
-              // Napló frissítése is
+              // Napló frissítése
               try {
                 const journal = JSON.parse(localStorage.getItem(BETTING_JOURNAL_KEY) || '[]');
                 const ji = journal.findIndex((j: any) => j.matchId === m.matchId);
                 if (ji !== -1) journal[ji] = { ...journal[ji], result: outcome, finalScore };
                 localStorage.setItem(BETTING_JOURNAL_KEY, JSON.stringify(journal));
                 localStorage.setItem(CHECKED_GREEN_KEY, JSON.stringify(updated));
+                saveJournal(journal);
                 window.dispatchEvent(new Event('journal-updated'));
               } catch { /* silent */ }
+              // esoccerbet.org validáció 10 mp-cel később — javítja az Altenar féleredményt
+              const validateM = { ...m };
+              setTimeout(async () => {
+                try {
+                  if (!validateM.betType || !validateM.betLine) return;
+                  const [res] = await resolveResults([{
+                    matchId: validateM.matchId,
+                    playerA: validateM.tip.playerA,
+                    playerB: validateM.tip.playerB,
+                    league: validateM.tip.league || validateM.tip.liga || 'GT Leagues',
+                    timestamp: validateM.timestamp,
+                    betType: validateM.betType,
+                    betLine: validateM.betLine,
+                  }]);
+                  if (!res || res.pending || !res.outcome || !res.score) return;
+                  if (res.score === finalScore && res.outcome === outcome) return; // match — no change
+                  // Score differs → correct the result
+                  console.warn(`⚠️ Altenar vs esoccerbet mismatch: ${finalScore} → ${res.score} (${outcome} → ${res.outcome})`);
+                  const BKEY = 'betting_journal';
+                  const GKEY = 'checked_green_matches';
+                  const j2: any[] = (() => { try { return JSON.parse(localStorage.getItem(BKEY) || '[]'); } catch { return []; } })();
+                  const g2: any[] = (() => { try { return JSON.parse(localStorage.getItem(GKEY) || '[]'); } catch { return []; } })();
+                  const ji2 = j2.findIndex((x: any) => x.matchId === validateM.matchId);
+                  const gi2 = g2.findIndex((x: any) => x.matchId === validateM.matchId);
+                  if (ji2 !== -1) j2[ji2] = { ...j2[ji2], result: res.outcome, finalScore: res.score };
+                  if (gi2 !== -1) g2[gi2] = { ...g2[gi2], result: res.outcome, finalScore: res.score };
+                  localStorage.setItem(BKEY, JSON.stringify(j2));
+                  localStorage.setItem(GKEY, JSON.stringify(g2));
+                  saveJournal(j2);
+                  window.dispatchEvent(new Event('journal-updated'));
+                  window.dispatchEvent(new Event('checked-matches-updated'));
+                } catch { /* silent */ }
+              }, 10_000);
               return updated;
             });
             lastKnownLive.current.delete(key);
@@ -381,6 +415,7 @@ export default function TopTips({ onAddMatch }: Props) {
           betLine: tip.ouLine > 0 ? tip.ouLine : undefined,
           odds: autoOdds,
           stake: globalStake,
+          strategy,
         };
         
         try {
@@ -454,7 +489,7 @@ export default function TopTips({ onAddMatch }: Props) {
     <div className="flex gap-10">
       <div className="flex-1 space-y-6">
         {/* Intraday Trend Widget */}
-        <TrendWidget />
+        <TrendWidget strategy={strategy} />
 
         {/* Controls — two-column: filters left, tall Frissítés right */}
         <div className="flex gap-3 items-stretch">

@@ -48,7 +48,7 @@ const C_ORANGE = '#f97316';
 const LEAGUE_COLORS: Record<string, string> = {
   'GT Leagues':             C_GREEN,
   'Esoccer Battle':         C_YELLOW,
-  'Cyber Live Arena':       '#a855f7',
+  'eAdriatic League':       '#38bdf8',
   'Esoccer H2H GG League':  C_ORANGE,
   'Esports Volta':          '#06b6d4',
 };

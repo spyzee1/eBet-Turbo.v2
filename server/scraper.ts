@@ -4,7 +4,7 @@ const BASE = 'https://esoccerbet.org';
 
 const LEAGUE_PATHS: Record<string, string> = {
   'GT Leagues': '/fifa-12-minutes',
-  'Cyber Live Arena': '/fifa-10-minutes',
+  'eAdriatic League': '/fifa-10-minutes',
   'Esoccer Battle': '/fifa-8-minutes',
   'Esports Volta': '/fifa-6-minutes',
 };
@@ -259,7 +259,7 @@ export async function scrapeBestPlayers(): Promise<RankingEntry[]> {
       const href = link.attr('href') || '';
       let league = 'Other';
       if (href.includes('12-minutes')) league = 'GT Leagues';
-      else if (href.includes('10-minutes')) league = 'Cyber Live Arena';
+      else if (href.includes('10-minutes')) league = 'eAdriatic League';
       else if (href.includes('8-minutes')) league = 'Esoccer Battle';
       else if (href.includes('6-minutes')) league = 'Esports Volta';
 
@@ -307,7 +307,7 @@ export async function scrapeSchedule(): Promise<ScheduleEntry[]> {
     const homeHref = homeLink.attr('href') || '';
     let league = 'Other';
     if (homeHref.includes('12-minutes')) league = 'GT Leagues';
-    else if (homeHref.includes('10-minutes')) league = 'Cyber Live Arena';
+    else if (homeHref.includes('10-minutes')) league = 'eAdriatic League';
     else if (homeHref.includes('8-minutes')) league = 'Esoccer Battle';
     else if (homeHref.includes('6-minutes')) league = 'Esports Volta';
 

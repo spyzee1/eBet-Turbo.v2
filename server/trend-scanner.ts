@@ -106,8 +106,8 @@ function calcSlope(values: number[]): number {
 
 // ── Core scan logic ────────────────────────────────────────────────────────────
 
-// Csak e két liga érvényes — Vegas.hu odds-ok megbízhatóan elérhetők
-const ALLOWED_LEAGUES = new Set(['Esoccer Battle', 'Esports Volta']);
+// Csak e két liga érvényes — msport.com odds-ok elérhetők
+const ALLOWED_LEAGUES = new Set(['GT Leagues', 'eAdriatic League']);
 
 export async function runTrendScan(deps: TrendScannerDeps): Promise<TrendSignal[]> {
   const schedule = await deps.getSchedule();

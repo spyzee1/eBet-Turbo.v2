@@ -22,7 +22,7 @@ function confColor(c: number) {
 function leagueBadge(l: string) {
   if (l === 'GT Leagues') return 'bg-green/20 text-green';
   if (l === 'Esoccer Battle') return 'bg-yellow/20 text-yellow';
-  if (l === 'Cyber Live Arena') return 'bg-purple/20 text-purple';
+  if (l === 'eAdriatic League') return 'bg-sky-500/20 text-sky-400';
   if (l === 'Esoccer H2H GG League') return 'bg-orange-500/20 text-orange-400';
   if (l === 'Esports Volta') return 'bg-cyan-500/20 text-cyan-400';
   return 'bg-slate-600/30 text-slate-400';
@@ -37,7 +37,7 @@ function categoryBadge(cat: string | undefined) {
 function leagueAbbr(l: string) {
   if (l === 'GT Leagues') return 'GT';
   if (l === 'Esoccer Battle') return 'EB';
-  if (l === 'Cyber Live Arena') return 'CLA';
+  if (l === 'eAdriatic League') return 'ADR';
   if (l === 'Esoccer H2H GG League') return 'H2H';
   if (l === 'Esports Volta') return 'VOLTA';
   return 'EV';
@@ -347,9 +347,9 @@ export default function TopTips({ onAddMatch }: Props) {
 
   const addTip = (tip: TopTip) => {
     const liga = tip.league === 'GT Leagues' ? 'GT Leagues' as const
-      : tip.league === 'Cyber Live Arena' ? 'eAdriaticLeague' as const
+      : tip.league === 'eAdriatic League' ? 'eAdriaticLeague' as const
       : 'Other' as const;
-    const percek = tip.league === 'GT Leagues' ? 12 : tip.league === 'Cyber Live Arena' ? 10 : tip.league === 'Esoccer Battle' ? 8 : 6;
+    const percek = tip.league === 'GT Leagues' ? 12 : tip.league === 'eAdriatic League' ? 10 : tip.league === 'Esoccer Battle' ? 8 : 6;
 
     const match: MatchInput = {
       id: genId(), liga, percek, matchTime: tip.time, matchDate: tip.date,
@@ -501,13 +501,13 @@ export default function TopTips({ onAddMatch }: Props) {
               className={`text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition ${selectedLeagues.has('GT Leagues') ? 'bg-green/20 text-green border-2 border-green' : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover border border-dark-border'}`}>
               GT Leagues (12p)
             </button>
+            <button onClick={() => toggleLeague('eAdriatic League')}
+              className={`text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition ${selectedLeagues.has('eAdriatic League') ? 'bg-sky-500/20 text-sky-400 border-2 border-sky-500' : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover border border-dark-border'}`}>
+              eAdriatic League (10p)
+            </button>
             <button onClick={() => toggleLeague('Esoccer H2H GG League')}
               className={`text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition ${selectedLeagues.has('Esoccer H2H GG League') ? 'bg-orange-500/20 text-orange-400 border-2 border-orange-400' : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover border border-dark-border'}`}>
               H2H GG League (8p)
-            </button>
-            <button onClick={() => toggleLeague('Cyber Live Arena')}
-              className={`text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition ${selectedLeagues.has('Cyber Live Arena') ? 'bg-purple/20 text-purple border-2 border-purple' : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover border border-dark-border'}`}>
-              Cyber Live Arena (10p)
             </button>
             <button onClick={() => toggleLeague('Esoccer Battle')}
               className={`text-xs px-3 py-1.5 rounded-lg font-semibold cursor-pointer transition ${selectedLeagues.has('Esoccer Battle') ? 'bg-yellow/20 text-yellow border-2 border-yellow' : 'bg-dark-card text-slate-400 hover:bg-dark-card-hover border border-dark-border'}`}>
@@ -651,7 +651,7 @@ export default function TopTips({ onAddMatch }: Props) {
                 const cardOpacity = isChecked ? 'opacity-50' : isTrendGreen ? 'opacity-60' : 'opacity-100';
                 const hasGolValue = tip.ouLine > 0
                   && Math.abs(tip.vartGol - tip.ouLine) >= 0.6
-                  && tip.oddsSource === 'vegas.hu';
+                  && (tip.oddsSource === 'vegas.hu' || tip.oddsSource === 'msport.com');
                 // bordó mindig prioritás — felülírja a zöld/sárga keretet
                 const cardBorder = isTrendGreen ? 'border-red-600'
                   : isChecked ? 'border-dark-border'
@@ -678,7 +678,7 @@ export default function TopTips({ onAddMatch }: Props) {
                     <div className="flex items-center gap-4 px-5 py-3 bg-dark-bg/40 border-b border-dark-border">
                       <span className="text-xs font-bold text-slate-500 w-6 shrink-0">#{idx + 1}</span>
                       <div className={`px-2 py-1 rounded text-[10px] font-bold ${leagueBadge(tip.league)}`}>
-                        {tip.league === 'GT Leagues' ? 'GT' : tip.league === 'Esoccer Battle' ? 'EB' : tip.league === 'Cyber Live Arena' ? 'CLA' : tip.league === 'Esoccer H2H GG League' ? 'H2H' : tip.league === 'Esports Volta' ? 'VOLTA' : 'EV'}
+                        {tip.league === 'GT Leagues' ? 'GT' : tip.league === 'Esoccer Battle' ? 'EB' : tip.league === 'eAdriatic League' ? 'ADR' : tip.league === 'Esoccer H2H GG League' ? 'H2H' : tip.league === 'Esports Volta' ? 'VOLTA' : 'EV'}
                       </div>
 
                       <span className="text-sm text-white font-mono font-bold whitespace-nowrap">{tip.time}</span>
@@ -688,13 +688,23 @@ export default function TopTips({ onAddMatch }: Props) {
                           <span className="ml-1 text-[10px] text-slate-600">várakozás...</span>
                         </span>
                       ) : (
-                        <span className={`text-sm font-semibold whitespace-nowrap ${tip.oddsSource === 'vegas.hu' ? 'text-green-400' : tip.oddsSource === 'bet365' ? 'text-blue-400' : 'text-accent-light'}`}>
+                        <span className={`text-sm font-semibold whitespace-nowrap ${tip.oddsSource === 'vegas.hu' ? 'text-green-400' : tip.oddsSource === 'bet365' ? 'text-blue-400' : tip.oddsSource === 'msport.com' ? 'text-sky-400' : 'text-accent-light'}`}>
                           O/U {tip.ouLine}
                           {tip.oddsSource === 'vegas.hu' && (
                             <>
                               <span className="ml-1 text-[10px] text-green-500">vegas</span>
                               {tip.oddsOver && tip.oddsOver > 1 && (
                                 <span className="ml-2 text-[11px] font-mono text-green-400">
+                                  ↑{tip.oddsOver.toFixed(2)} ↓{(tip.oddsUnder ?? 0).toFixed(2)}
+                                </span>
+                              )}
+                            </>
+                          )}
+                          {tip.oddsSource === 'msport.com' && (
+                            <>
+                              <span className="ml-1 text-[10px] text-sky-500">msport</span>
+                              {tip.oddsOver && tip.oddsOver > 1 && (
+                                <span className="ml-2 text-[11px] font-mono text-sky-400">
                                   ↑{tip.oddsOver.toFixed(2)} ↓{(tip.oddsUnder ?? 0).toFixed(2)}
                                 </span>
                               )}
@@ -717,13 +727,19 @@ export default function TopTips({ onAddMatch }: Props) {
                           {pct(tip.winEselyB)}
                         </span>
                         
-                        <span className={`text-sm font-semibold uppercase ml-4 ${isHighWin && tip.winEselyA >= 0.7 && !isChecked ? 'text-yellow-400' : 'text-white'}`}>
-                          {tip.playerA}
-                        </span>
+                        <div className="flex flex-col items-end ml-4">
+                          <span className={`text-sm font-semibold uppercase ${isHighWin && tip.winEselyA >= 0.7 && !isChecked ? 'text-yellow-400' : 'text-white'}`}>
+                            {tip.playerA}
+                          </span>
+                          {tip.teamA && <span className="text-[10px] text-slate-500 leading-tight">{tip.teamA}</span>}
+                        </div>
                         <span className="text-slate-500 text-sm">vs.</span>
-                        <span className={`text-sm font-semibold uppercase ${isHighWin && tip.winEselyB >= 0.7 && !isChecked ? 'text-yellow-400' : 'text-white'}`}>
-                          {tip.playerB}
-                        </span>
+                        <div className="flex flex-col items-start">
+                          <span className={`text-sm font-semibold uppercase ${isHighWin && tip.winEselyB >= 0.7 && !isChecked ? 'text-yellow-400' : 'text-white'}`}>
+                            {tip.playerB}
+                          </span>
+                          {tip.teamB && <span className="text-[10px] text-slate-500 leading-tight">{tip.teamB}</span>}
+                        </div>
                       </div>
 
                       <span className={`text-lg font-bold whitespace-nowrap ${confColor(tip.confidence)}`}>

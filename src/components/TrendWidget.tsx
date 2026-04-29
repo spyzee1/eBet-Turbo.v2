@@ -9,7 +9,7 @@ const TREND_RED_KEY      = 'trend_red';
 function leagueBadge(l: string) {
   if (l === 'GT Leagues')              return 'bg-green/20 text-green';
   if (l === 'Esoccer Battle')          return 'bg-yellow/20 text-yellow';
-  if (l === 'Cyber Live Arena')        return 'bg-purple/20 text-purple';
+  if (l === 'eAdriatic League')        return 'bg-sky-500/20 text-sky-400';
   if (l === 'Esoccer H2H GG League')  return 'bg-orange-500/20 text-orange-400';
   if (l === 'Esports Volta')           return 'bg-cyan-500/20 text-cyan-400';
   return 'bg-slate-600/30 text-slate-400';
@@ -214,7 +214,7 @@ export default function TrendWidget({ strategy }: { strategy?: 'A' | 'B' | 'C' }
       >
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-green-400">▲</span>
-          <span className="text-sm font-semibold text-white">Intraday Trend Jelzések</span>
+          <span className="text-sm font-semibold text-white">Intraday TREND/VALUE</span>
           {signals.length > 0 && (
             <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
               strongCount > 0

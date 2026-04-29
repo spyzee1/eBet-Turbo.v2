@@ -31,6 +31,7 @@ import {
 import {
   configureTrendScanner, startTrendScanner, getTrendScannerState, runTrendScanOnce,
 } from './trend-scanner.js';
+import { getMsportOdds, getMsportOddsForMatch, getMsportSchedule, getMsportRawDebug, setMsportCookie, getMsportCookieStatus } from './msport-scraper.js';
 
 const app = express();
 app.use(cors());
@@ -71,18 +72,24 @@ function filterTCSchedule<T extends { time?: string; scoreHome?: number; scoreAw
 
 /** Combined schedule: esoccerbet.org + TotalCorner-only leagues (upcoming only) */
 async function getCombinedSchedule() {
-  const [esbResult, h2hResult, voltaResult] = await Promise.allSettled([
+  const [esbResult, h2hResult, voltaResult, msportResult] = await Promise.allSettled([
     esbScrapeSchedule(),
     tcScrapeSchedule('Esoccer H2H GG League'),
     tcScrapeSchedule('Esports Volta'),
+    getMsportSchedule(),   // GT Leagues + eAdriatic League — csak msport comingSoons ablakban lévő meccsek
   ]);
-  const esb      = esbResult.status    === 'fulfilled' ? esbResult.value    : [];
-  const h2hRaw   = h2hResult.status    === 'fulfilled' ? h2hResult.value    : [];
-  const voltaRaw = voltaResult.status  === 'fulfilled' ? voltaResult.value  : [];
+  // GT Leagues és eAdriatic KIZÁRÓLAG az msport-ból jön (csak valódi odds-os meccsek)
+  // → esb-ből ezeket kiszűrjük, hogy ne jelenjenek meg n/a odds-szal
+  const esbAll    = esbResult.status     === 'fulfilled' ? esbResult.value     : [];
+  const esb       = esbAll.filter(e => e.league !== 'GT Leagues' && e.league !== 'eAdriatic League');
+  const h2hRaw    = h2hResult.status     === 'fulfilled' ? h2hResult.value     : [];
+  const voltaRaw  = voltaResult.status   === 'fulfilled' ? voltaResult.value   : [];
+  const msportRaw = msportResult.status  === 'fulfilled' ? msportResult.value  : [];
 
   // Shift TC times from BST/CET (UTC+1) to Budapest CEST (UTC+2), then filter
   return [
     ...esb,
+    ...msportRaw,          // GT Leagues + eAdriatic League, valódi O/U odds-szal
     ...filterTCSchedule(h2hRaw.map(shiftTCTime)),
     ...filterTCSchedule(voltaRaw.map(shiftTCTime)),
   ];
@@ -307,6 +314,61 @@ app.get('/api/debug-tc-schedule', async (req, res) => {
   }
 });
 
+// GET /api/msport-odds — msport.com O/U odds (GT Leagues + eAdriatic League)
+app.get('/api/msport-odds', async (_req, res) => {
+  try {
+    const odds = await getMsportOdds();
+    res.json(odds);
+  } catch {
+    res.json([]);
+  }
+});
+
+// GET /api/msport-debug — nyers msport.com API válasz (fejlesztéshez)
+app.get('/api/msport-debug', async (_req, res) => {
+  try {
+    const raw = await getMsportRawDebug();
+    res.json(raw);
+  } catch (e: unknown) {
+    res.json({ error: e instanceof Error ? e.message : 'Unknown' });
+  }
+});
+
+// POST /api/msport-cookie — msport.com session cookie beállítása (DevTools-ból másolva)
+// Body: { "cookie": "cookie1=val1; cookie2=val2; ..." }
+app.post('/api/msport-cookie', (req, res) => {
+  const { cookie } = req.body as { cookie?: string };
+  if (!cookie || typeof cookie !== 'string' || cookie.trim().length < 5) {
+    res.status(400).json({ error: 'Hiányzó vagy érvénytelen cookie string' });
+    return;
+  }
+  setMsportCookie(cookie);
+  res.json({ ok: true, length: cookie.trim().length, msg: 'Cookie beállítva. Cache törölve, következő lekérésnél az új cookie lesz használva.' });
+});
+
+// GET /api/msport-cookie — aktuális cookie státusz
+app.get('/api/msport-cookie', (_req, res) => {
+  res.json(getMsportCookieStatus());
+});
+
+// GET /api/debug-schedule — megmutatja mit lát a szerver a schedule-ból
+app.get('/api/debug-schedule', async (_req, res) => {
+  try {
+    const schedule = await getCombinedSchedule();
+    const byLeague: Record<string, number> = {};
+    for (const m of schedule) { byLeague[m.league] = (byLeague[m.league] || 0) + 1; }
+    res.json({
+      total: schedule.length,
+      byLeague,
+      eAdriaticSample: schedule.filter(m => m.league === 'eAdriatic League').slice(0, 5),
+      gtSample: schedule.filter(m => m.league === 'GT Leagues').slice(0, 5),
+      msportOdds: await getMsportOdds(),
+    });
+  } catch (e: unknown) {
+    res.status(500).json({ error: e instanceof Error ? e.message : 'Unknown' });
+  }
+});
+
 // GET /api/live-scores — élő meccsek gólállása + menetideje (Altenar)
 app.get('/api/live-scores', async (_req, res) => {
   try {
@@ -341,11 +403,12 @@ app.get('/api/test-scrape', async (_req, res) => {
 });
 
 const cache = new Map<string, { data: unknown; ts: number }>();
-const CACHE_TTL = 3 * 60 * 1000;
+const CACHE_TTL        = 3 * 60 * 1000;  // 3 perc — játékos stats, H2H, stb.
+const SCHEDULE_CACHE_TTL = 30_000;        // 30 mp — meccsrend (msport comingSoons gyorsan változik)
 
-function cached<T>(key: string, fn: () => Promise<T>): Promise<T> {
+function cached<T>(key: string, fn: () => Promise<T>, ttl: number = CACHE_TTL): Promise<T> {
   const entry = cache.get(key);
-  if (entry && Date.now() - entry.ts < CACHE_TTL) {
+  if (entry && Date.now() - entry.ts < ttl) {
     return Promise.resolve(entry.data as T);
   }
   return fn().then(data => {
@@ -388,7 +451,7 @@ app.get('/api/best-players', async (_req, res) => {
 app.get('/api/schedule', async (req, res) => {
   try {
     const league = req.query.league as string | undefined;
-    let data = await cached('schedule', getCombinedSchedule);
+    let data = await cached('schedule', getCombinedSchedule, SCHEDULE_CACHE_TTL);
     if (league) data = data.filter(m => m.league === league);
     res.json(data);
   } catch (e: unknown) {
@@ -718,7 +781,7 @@ app.get('/api/top-tips', async (req, res) => {
     console.log(`\n🎯 Strategy: ${selectedStrategy.name} (${selectedStrategy.id})`);
     console.log(`   Settings: WR=${selectedStrategy.settings.winRateSuly}, Forma=${selectedStrategy.settings.formaSuly}, H2H=${selectedStrategy.settings.h2hSuly}`);
     // 1. Get schedule (+ keep GT Leagues cards visible 3 min after start)
-    let schedule = await cached('schedule', getCombinedSchedule);
+    let schedule = await cached('schedule', getCombinedSchedule, SCHEDULE_CACHE_TTL);
     updateStickyBuffer(schedule);
     schedule = applySticky(schedule);
     if (leagueFilter) schedule = schedule.filter(m => m.league === leagueFilter);
@@ -729,7 +792,7 @@ app.get('/api/top-tips', async (req, res) => {
     // with different player rosters, so no mapping for that.
     const esbToTcLeague: Record<string, string> = {
       'Esoccer Battle': 'Esoccer Battle',
-      'Cyber Live Arena': 'Esoccer Adriatic League',
+      'eAdriatic League': 'Esoccer Adriatic League',
     };
     const tcFixturesByLeague = new Map<string, Map<string, string>>();
     // Map: ESB league -> "playerA|playerB" (both directions) -> matchId
@@ -888,9 +951,9 @@ app.get('/api/top-tips', async (req, res) => {
           const h2hRatioA = h2hTotal > 0 ? (h2hWinsA + h2hDraws * 0.5) / h2hTotal : 0.5;
 
           const liga = entry.league === 'GT Leagues' ? 'GT Leagues' as const
-            : entry.league === 'Cyber Live Arena' ? 'eAdriaticLeague' as const
+            : entry.league === 'eAdriatic League' ? 'eAdriaticLeague' as const
               : 'Other' as const;
-          const percek = entry.league === 'GT Leagues' ? 12 : entry.league === 'Cyber Live Arena' ? 10 : (entry.league === 'Esoccer Battle' || entry.league === 'Esoccer H2H GG League') ? 8 : 6; // Esports Volta = 6
+          const percek = entry.league === 'GT Leagues' ? 12 : entry.league === 'eAdriatic League' ? 10 : (entry.league === 'Esoccer Battle' || entry.league === 'Esoccer H2H GG League') ? 8 : 6; // Esports Volta = 6
 
           // Try to get real odds, goal line, and movement from totalcorner
           let realOddsA: number | undefined;
@@ -961,8 +1024,27 @@ app.get('/api/top-tips', async (req, res) => {
             // ignore - fallback to estimated
           }
 
-          // GT Leagues + H2H GG League: only real Vegas.hu odds are meaningful; n/a until they arrive
-          if ((entry.league === 'GT Leagues' || entry.league === 'Esoccer H2H GG League') && oddsSource !== 'vegas.hu') {
+          // msport.com: GT Leagues + eAdriatic League (Vegas.hu ezeket nem fedi)
+          if (entry.league === 'GT Leagues' || entry.league === 'eAdriatic League') {
+            try {
+              const msportOdds = await getMsportOddsForMatch(entry.playerHome, entry.playerAway);
+              if (msportOdds && msportOdds.ouLine > 0) {
+                realOuLine    = msportOdds.ouLine;
+                realOddsOver  = msportOdds.oddsOver;
+                realOddsUnder = msportOdds.oddsUnder;
+                oddsSource    = 'msport.com';
+                console.log(`[top-tips] ✅ msport odds OK: ${entry.playerHome} vs ${entry.playerAway} | O/U ${msportOdds.ouLine}`);
+              } else {
+                console.log(`[top-tips] ❌ msport odds hiányzik: ${entry.playerHome} vs ${entry.playerAway} (${entry.league}) | pre-source: ${oddsSource}`);
+              }
+            } catch (err) {
+              console.log(`[top-tips] ⚠️ msport hiba: ${entry.playerHome} vs ${entry.playerAway}: ${err}`);
+            }
+          }
+
+          // GT Leagues + eAdriatic + H2H GG: csak valódi odds értelmes; n/a amíg nem tölt be
+          if ((entry.league === 'GT Leagues' || entry.league === 'eAdriatic League' || entry.league === 'Esoccer H2H GG League')
+              && oddsSource !== 'vegas.hu' && oddsSource !== 'msport.com') {
             oddsSource = 'n/a';
           }
 
@@ -1142,8 +1224,9 @@ app.get('/api/top-tips', async (req, res) => {
     });
 
     // 4. Filter & rank (categories: STRONG_BET > BET, H2H boost, real odds boost)
+    // n/a odds-os meccsek kizárva: GT Leagues + eAdriatic → csak valódi (msport/vegas) odds-szal jelennek meg
     const valueBets = deduplicated
-      .filter(r => r.category !== 'NO_BET' && r.confidence >= minConf && r.edge >= minEdge)
+      .filter(r => r.category !== 'NO_BET' && r.confidence >= minConf && r.edge >= minEdge && r.oddsSource !== 'n/a')
       .sort((a, b) => {
         // Category score: STRONG_BET = 2, BET = 1
         const catScore = (t: typeof a) => (t.category === 'STRONG_BET' ? 2 : 1);
@@ -1398,7 +1481,7 @@ app.get('/api/backtest/:player', async (req, res) => {
     const league = (req.query.league as string) || 'GT Leagues';
     const opponent = req.query.opponent as string | undefined;
     const liga = league === 'GT Leagues' ? 'GT Leagues' as const
-      : league === 'Cyber Live Arena' ? 'eAdriaticLeague' as const
+      : league === 'eAdriatic League' ? 'eAdriaticLeague' as const
         : 'Other' as const;
 
     const matches = await buildBacktestData(req.params.player, league, opponent);
@@ -1414,7 +1497,7 @@ app.post('/api/optimize/:player', async (req, res) => {
   try {
     const league = (req.query.league as string) || 'GT Leagues';
     const liga = league === 'GT Leagues' ? 'GT Leagues' as const
-      : league === 'Cyber Live Arena' ? 'eAdriaticLeague' as const
+      : league === 'eAdriatic League' ? 'eAdriaticLeague' as const
         : 'Other' as const;
 
     const matches = await buildBacktestData(req.params.player, league);
@@ -1549,6 +1632,10 @@ configureTrendScanner({
   },
   getOdds: async (playerA, playerB) => {
     try {
+      // Elsőként msport.com (GT Leagues + eAdriatic League)
+      const msport = await getMsportOddsForMatch(playerA, playerB);
+      if (msport && msport.ouLine > 0) return msport;
+      // Fallback: Vegas.hu (Altenar) — többi liga
       const v = await getVegasOdds(playerA, playerB);
       if (v && v.ouLine > 0) return { ouLine: v.ouLine, oddsOver: v.oddsOver };
       return null;
@@ -1896,7 +1983,7 @@ app.get('/api/tc/schedule/:league', async (req, res) => {
 // ============ RESULT RESOLVER — esoccerbet.org ============
 const MATCH_DURATION_MIN: Record<string, number> = {
   'GT Leagues': 12,
-  'Cyber Live Arena': 10,
+  'eAdriatic League': 10,
   'Esoccer Battle': 8,
   'Esports Volta': 6,
   'Esoccer H2H GG League': 8,

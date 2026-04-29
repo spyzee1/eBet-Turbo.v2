@@ -181,12 +181,12 @@ export function runBacktest(
   const details: BacktestResult['details'] = [];
   
   const percek = matches[0]?.league === 'GT Leagues' ? 12 
-    : matches[0]?.league === 'Cyber Live Arena' ? 10 
+    : matches[0]?.league === 'eAdriatic League' ? 10 
     : matches[0]?.league === 'Esoccer Battle' ? 8
     : 6;
   
   const liga = matches[0]?.league === 'GT Leagues' ? 'GT Leagues' as const
-    : matches[0]?.league === 'Cyber Live Arena' ? 'eAdriaticLeague' as const
+    : matches[0]?.league === 'eAdriatic League' ? 'eAdriaticLeague' as const
     : matches[0]?.league === 'Esoccer Battle' ? 'GT Leagues' as const
     : 'Other' as const;
   

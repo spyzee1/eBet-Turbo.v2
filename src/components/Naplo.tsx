@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 function leagueBadge(l: string) {
   if (l === 'GT Leagues') return 'bg-green/20 text-green';
   if (l === 'Esoccer Battle') return 'bg-yellow/20 text-yellow';
-  if (l === 'Cyber Live Arena') return 'bg-purple/20 text-purple';
+  if (l === 'eAdriatic League') return 'bg-sky-500/20 text-sky-400';
   if (l === 'Esoccer H2H GG League') return 'bg-orange-500/20 text-orange-400';
   if (l === 'Esports Volta') return 'bg-cyan-500/20 text-cyan-400';
   return 'bg-slate-600/30 text-slate-400';
@@ -12,7 +12,7 @@ function leagueBadge(l: string) {
 function leagueAbbr(l: string) {
   if (l === 'GT Leagues') return 'GT';
   if (l === 'Esoccer Battle') return 'EB';
-  if (l === 'Cyber Live Arena') return 'CLA';
+  if (l === 'eAdriatic League') return 'ADR';
   if (l === 'Esoccer H2H GG League') return 'H2H';
   if (l === 'Esports Volta') return 'VOLTA';
   return 'EV';

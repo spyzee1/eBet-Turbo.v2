@@ -46,7 +46,7 @@ export interface TotalCornerSchedule {
 export const TOTALCORNER_LEAGUES = {
   'GT Leagues': { id: '12985', minutes: 12 },
   'Esoccer Battle': { id: '12995', minutes: 8 },
-  'Cyber Live Arena': { id: '13321', minutes: 10 },
+  'eAdriatic League': { id: '13321', minutes: 10 },
   'Esports Volta': { id: '38895', minutes: 6 },
   'Esoccer H2H GG League': { id: '37552', minutes: 8 },
 } as const;

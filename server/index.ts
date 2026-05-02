@@ -83,8 +83,17 @@ const dailyMatchMap = new Map<string, DailyMatchEntry>();
 let dailyMapDate = '';
 
 function todayMmDd(): string {
-  const n = new Date();
-  return `${String(n.getMonth() + 1).padStart(2, '0')}/${String(n.getDate()).padStart(2, '0')}`;
+  // Budapest CEST = UTC+2 — explicit offset, szerver timezone-tól független
+  const d = new Date(Date.now() + 2 * 3600 * 1000);
+  return `${String(d.getUTCMonth() + 1).padStart(2, '0')}/${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
+/** startTime (Unix ms) → "MM/DD" Budapest CEST (UTC+2) */
+function startTimeToMmDd(startTimeMs: number): string {
+  // Budapest = UTC+2; new Date() uses server local time which may be UTC
+  // → Explicit UTC+2 offset biztosítja a helyes dátumot minden szerver-timezone esetén
+  const d = new Date(startTimeMs + 2 * 3600 * 1000);
+  return `${String(d.getUTCMonth() + 1).padStart(2, '0')}/${String(d.getUTCDate()).padStart(2, '0')}`;
 }
 
 function updateDailyAccum(odds: import('./msport-scraper.js').MsportOdds[]): void {
@@ -92,12 +101,11 @@ function updateDailyAccum(odds: import('./msport-scraper.js').MsportOdds[]): voi
   if (dailyMapDate !== today) { dailyMatchMap.clear(); dailyMapDate = today; }
   for (const o of odds) {
     if (dailyMatchMap.has(o.eventId)) continue;
-    const d = new Date(o.startTime);
-    const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    const date = `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+    const date = startTimeToMmDd(o.startTime);
+    // time-t szándékosan NEM tároljuk UTC-ben — a frontend startTime-ból számítja helyi időben
     dailyMatchMap.set(o.eventId, {
       playerA: o.playerA, playerB: o.playerB, teamA: o.teamA, teamB: o.teamB,
-      league: o.league, time, date,
+      league: o.league, time: date, date,  // time unused, frontend uses startTime
       ouLine: o.ouLine, oddsOver: o.oddsOver, oddsUnder: o.oddsUnder,
       startTime: o.startTime, eventId: o.eventId,
     });

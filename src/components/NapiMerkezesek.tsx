@@ -44,25 +44,29 @@ function inputToMmDd(yyyyMmDd: string): string {
   return `${parts[1]}/${parts[2]}`;
 }
 
-function minutesFromNow(timeStr: string): number {
-  const [h, m] = timeStr.split(':').map(Number);
-  const now = new Date();
-  const matchMin = h * 60 + m;
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  let diff = matchMin - nowMin;
-  if (diff < -720) diff += 1440;
-  if (diff > 720) diff -= 1440;
-  return diff;
+/** startTime (Unix ms) → "HH:MM" a böngésző helyi ideje szerint (CEST Budapestnek) */
+function formatMatchTime(startTimeMs: number): string {
+  const d = new Date(startTimeMs);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/** Mennyi perc van a meccs kezdéséig? Negatív = már elkezdődött.
+ *  startTime-alapú → timezone-agnosztikus */
+function minutesFromStart(startTimeMs: number): number {
+  return (startTimeMs - Date.now()) / 60_000;
 }
 
 // ── Match Card ─────────────────────────────────────────────────────────────────
 
 function MatchCard({ match }: { match: DailyMatch }) {
   const hasOdds = match.ouLine > 0 && match.oddsOver > 1 && match.oddsUnder > 1;
-  const diff = minutesFromNow(match.time);
-  const isLive = diff >= -12 && diff <= 0;
-  const isPast = diff < -12;
+  // startTime alapú összehasonlítás — timezone-agnosztikus
+  const maxDuration = match.league === 'eAdriatic League' ? 10 : 12; // percben
+  const diff = minutesFromStart(match.startTime);
+  const isLive = diff >= -maxDuration && diff <= 0;
+  const isPast = diff < -maxDuration;
   const isSoon = diff > 0 && diff <= 15;
+  const displayTime = formatMatchTime(match.startTime);
 
   // H2H lazy betöltés
   const [h2h, setH2h] = useState<H2HData | null>(null);
@@ -108,7 +112,7 @@ function MatchCard({ match }: { match: DailyMatch }) {
         <div className="w-12 shrink-0 text-center">
           <span className={`text-sm font-mono font-bold ${
             isLive ? 'text-green' : isSoon ? 'text-yellow-400' : isPast ? 'text-slate-500' : 'text-slate-300'
-          }`}>{match.time}</span>
+          }`}>{displayTime}</span>
           {isLive && <div className="text-[9px] text-green font-bold leading-tight">● LIVE</div>}
         </div>
 

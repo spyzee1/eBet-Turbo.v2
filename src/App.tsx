@@ -11,6 +11,7 @@ import Backtest from './components/Backtest';
 import Naplo from './components/Naplo';
 import Segedlet from './components/Segedlet';
 import Statisztika from './components/Statisztika';
+import NapiMerkezesek from './components/NapiMerkezesek';
 import ToastContainer from './components/ToastContainer';
 import { MatchInput, MatchResult, Settings } from './model/types';
 import { calculateMatch } from './model/calculator';
@@ -22,7 +23,7 @@ import {
 } from './model/store';
 import { autoCheckResults, resolveResults, fetchJournal, saveJournal } from './api';
 
-type View = 'dashboard' | 'topTips' | 'naplo' | 'upcoming' | 'newMatch' | 'playerProfile' | 'backtest' | 'history' | 'settings' | 'statistics' | 'segedlet';
+type View = 'dashboard' | 'topTips' | 'napiMerkezesek' | 'naplo' | 'upcoming' | 'newMatch' | 'playerProfile' | 'backtest' | 'history' | 'settings' | 'statistics' | 'segedlet';
 
 function App() {
   const [view, setView] = useState<View>('topTips');
@@ -204,6 +205,7 @@ function App() {
       <main className="flex-1">
         <div className="max-w-screen-2xl mx-auto p-4 lg:p-6">
           {view === 'topTips' && <TopTips onAddMatch={addMatch} />}
+          {view === 'napiMerkezesek' && <NapiMerkezesek />}
           {view === 'naplo' && <Naplo />}
           {view === 'newMatch' && <MatchForm onSubmit={addMatch} />}
           {view === 'segedlet' && <Segedlet />}

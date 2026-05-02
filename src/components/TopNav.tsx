@@ -2,7 +2,7 @@ import { useState } from 'react';
 import logo from '../assets/ebet.png';
 import DigitalClock from './DigitalClock';
 
-type View = 'dashboard' | 'topTips' | 'naplo' | 'upcoming' | 'newMatch' | 'playerProfile' | 'backtest' | 'history' | 'settings' | 'statistics' | 'segedlet';
+type View = 'dashboard' | 'topTips' | 'napiMerkezesek' | 'naplo' | 'upcoming' | 'newMatch' | 'playerProfile' | 'backtest' | 'history' | 'settings' | 'statistics' | 'segedlet';
 
 interface Props {
   current: View;
@@ -10,10 +10,11 @@ interface Props {
 }
 
 const NAV_ITEMS: { id: View; label: string }[] = [
-  { id: 'topTips',    label: 'Kezdőlap' },
-  { id: 'segedlet',   label: 'Segédlet' },
-  { id: 'naplo',      label: 'Fogadási Napló' },
-  { id: 'statistics', label: 'Statisztika' },
+  { id: 'topTips',         label: 'Kezdőlap' },
+  { id: 'napiMerkezesek',  label: 'Napi Mérkőzések' },
+  { id: 'segedlet',        label: 'Segédlet' },
+  { id: 'naplo',           label: 'Fogadási Napló' },
+  { id: 'statistics',      label: 'Statisztika' },
 ];
 
 export default function TopNav({ current, onChange }: Props) {

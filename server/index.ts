@@ -31,7 +31,7 @@ import {
 import {
   configureTrendScanner, startTrendScanner, getTrendScannerState, runTrendScanOnce,
 } from './trend-scanner.js';
-import { getMsportOdds, getMsportOddsForMatch, getMsportSchedule, getMsportRawDebug, setMsportCookie, getMsportCookieStatus } from './msport-scraper.js';
+import { getMsportOdds, getMsportOddsForMatch, getMsportSchedule, getMsportRawDebug, setMsportCookie, getMsportCookieStatus, getMsportLiveScores } from './msport-scraper.js';
 
 const app = express();
 app.use(cors());
@@ -70,6 +70,40 @@ function filterTCSchedule<T extends { time?: string; scoreHome?: number; scoreAw
   });
 }
 
+// ── Napi Mérkőzések accumulator ───────────────────────────────────────────────
+// Gyűjti az egész nap összes GT Leagues + eAdriatic meccsét (eventId alapján deduplikálva).
+// Minden getCombinedSchedule() hívásnál frissül → scanner lefedés biztosított.
+interface DailyMatchEntry {
+  playerA: string; playerB: string; teamA: string; teamB: string;
+  league: string; time: string; date: string;
+  ouLine: number; oddsOver: number; oddsUnder: number;
+  startTime: number; eventId: string;
+}
+const dailyMatchMap = new Map<string, DailyMatchEntry>();
+let dailyMapDate = '';
+
+function todayMmDd(): string {
+  const n = new Date();
+  return `${String(n.getMonth() + 1).padStart(2, '0')}/${String(n.getDate()).padStart(2, '0')}`;
+}
+
+function updateDailyAccum(odds: import('./msport-scraper.js').MsportOdds[]): void {
+  const today = todayMmDd();
+  if (dailyMapDate !== today) { dailyMatchMap.clear(); dailyMapDate = today; }
+  for (const o of odds) {
+    if (dailyMatchMap.has(o.eventId)) continue;
+    const d = new Date(o.startTime);
+    const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const date = `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+    dailyMatchMap.set(o.eventId, {
+      playerA: o.playerA, playerB: o.playerB, teamA: o.teamA, teamB: o.teamB,
+      league: o.league, time, date,
+      ouLine: o.ouLine, oddsOver: o.oddsOver, oddsUnder: o.oddsUnder,
+      startTime: o.startTime, eventId: o.eventId,
+    });
+  }
+}
+
 /** Combined schedule: esoccerbet.org + TotalCorner-only leagues (upcoming only) */
 async function getCombinedSchedule() {
   const [esbResult, h2hResult, voltaResult, msportResult] = await Promise.allSettled([
@@ -85,6 +119,9 @@ async function getCombinedSchedule() {
   const h2hRaw    = h2hResult.status     === 'fulfilled' ? h2hResult.value     : [];
   const voltaRaw  = voltaResult.status   === 'fulfilled' ? voltaResult.value   : [];
   const msportRaw = msportResult.status  === 'fulfilled' ? msportResult.value  : [];
+
+  // Napi accumulator frissítése (cached getMsportOdds, nem extra API hívás)
+  try { const odds = await getMsportOdds(); updateDailyAccum(odds); } catch { /* silent */ }
 
   // Shift TC times from BST/CET (UTC+1) to Budapest CEST (UTC+2), then filter
   return [
@@ -369,11 +406,34 @@ app.get('/api/debug-schedule', async (_req, res) => {
   }
 });
 
-// GET /api/live-scores — élő meccsek gólállása + menetideje (Altenar)
+// GET /api/live-scores — élő meccsek gólállása + menetideje
+// Forrás 1: Altenar/vegas.hu  → GT Leagues
+// Forrás 2: msport detail API → eAdriatic League (+ GT fallback)
 app.get('/api/live-scores', async (_req, res) => {
   try {
-    const scores = await getAllLiveScores();
-    res.json(scores);
+    // 1. Altenar live scores (GT Leagues)
+    const altenarScores = await getAllLiveScores().catch(() => []);
+
+    // 2. msport live scores — csak az éppen futó meccsekre (startTime 0–15 perc)
+    const now = Date.now();
+    const MAX_MATCH_MS = 15 * 60 * 1000; // 15 perces ablak (GT=12p, eAdr=10p + buffer)
+    const liveEventIds = Array.from(dailyMatchMap.values())
+      .filter(m => {
+        const elapsed = now - m.startTime;
+        return elapsed >= 0 && elapsed <= MAX_MATCH_MS;
+      })
+      .map(m => m.eventId);
+
+    const msportScores = liveEventIds.length > 0
+      ? await getMsportLiveScores(liveEventIds).catch(() => [])
+      : [];
+
+    // Összefűzés — msport-os meccseket az Altenar lista kiegészíti
+    // (ha mindkét forrásban szerepel, az Altenar marad — GT Leagues-nél pontosabb)
+    const altenarKeys = new Set(altenarScores.map(s => `${s.playerA}|${s.playerB}`));
+    const msportOnly = msportScores.filter(s => !altenarKeys.has(`${s.playerA}|${s.playerB}`));
+
+    res.json([...altenarScores, ...msportOnly]);
   } catch {
     res.json([]);
   }
@@ -2114,6 +2174,93 @@ app.post('/api/journal', (req, res) => {
     fs.writeFileSync(JOURNAL_FILE, JSON.stringify(req.body, null, 2));
     res.json({ ok: true });
   } catch { res.status(500).json({ ok: false }); }
+});
+
+// GET /api/h2h-quick/:playerA/:playerB?league=...
+// Könnyű H2H endpoint a Napi Mérkőzések kártyákhoz.
+// Visszaadja az utolsó 10 egymás elleni meccset + gólátlagot.
+app.get('/api/h2h-quick/:playerA/:playerB', async (req, res) => {
+  try {
+    const league = (req.query.league as string) || 'GT Leagues';
+    const pA = req.params.playerA;
+    const pB = req.params.playerB;
+
+    const [a, b] = await Promise.all([
+      cached(`player:${pA}:${league}`, () => scrapePlayerStats(pA, league)),
+      cached(`player:${pB}:${league}`, () => scrapePlayerStats(pB, league)),
+    ]);
+
+    // Egymás elleni meccsek A szemszögéből
+    const fromA = a.lastMatches
+      .filter(m => m.opponent.toLowerCase() === pB.toLowerCase())
+      .map(m => ({
+        date: m.date,
+        scoreA: m.scoreHome,
+        scoreB: m.scoreAway,
+        totalGoals: m.scoreHome + m.scoreAway,
+        resultA: m.result as 'win' | 'loss' | 'draw',
+        source: 'A',
+      }));
+
+    // Egymás elleni meccsek B szemszögéből (fordított score)
+    const fromB = b.lastMatches
+      .filter(m => m.opponent.toLowerCase() === pA.toLowerCase())
+      .map(m => ({
+        date: m.date,
+        scoreA: m.scoreAway,   // B lapjáról nézve: away = A
+        scoreB: m.scoreHome,
+        totalGoals: m.scoreHome + m.scoreAway,
+        resultA: (m.result === 'win' ? 'loss' : m.result === 'loss' ? 'win' : 'draw') as 'win' | 'loss' | 'draw',
+        source: 'B',
+      }));
+
+    // Összefűzés + deduplikálás dátum alapján
+    const seen = new Set<string>();
+    const all = [...fromA, ...fromB].filter(m => {
+      const key = `${m.date}|${m.scoreA}:${m.scoreB}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    // Rendezés dátum szerint (legújabb elöl)
+    all.sort((x, y) => (y.date > x.date ? 1 : -1));
+    const matches = all.slice(0, 10);
+
+    const avgGoals = matches.length > 0
+      ? matches.reduce((s, m) => s + m.totalGoals, 0) / matches.length
+      : null;
+
+    // Mai nap prefix
+    const now = new Date();
+    const todayPrefix = `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
+    const todayMatches = matches.filter(m => m.date.startsWith(todayPrefix));
+
+    res.json({ matches, avgGoals, todayCount: todayMatches.length });
+  } catch (e: any) {
+    res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+// GET /api/daily-matches?date=MM/DD  — Napi Mérkőzések oldal adatforrása
+// Visszaadja az összes GT Leagues + eAdriatic meccset a nap folyamán.
+// Friss msport lekéréssel egészíti ki az accumulatort, majd dátum szerint szűr.
+app.get('/api/daily-matches', async (req, res) => {
+  try {
+    // Frissítjük az accumulatort (30mp cache, nem okoz extra API hívást)
+    const fresh = await getMsportOdds();
+    updateDailyAccum(fresh);
+
+    const dateParam = (req.query.date as string) || todayMmDd();
+
+    const result = Array.from(dailyMatchMap.values())
+      .filter(m => m.date === dateParam)
+      .sort((a, b) => a.startTime - b.startTime);
+
+    res.json(result);
+  } catch (e: any) {
+    res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+  }
 });
 
 // ============ VÉGÜK ============

@@ -123,6 +123,18 @@ export interface MsportOdds {
   source: 'msport.com';
 }
 
+export interface MsportLiveScore {
+  playerA: string;   // lowercase játékosnév
+  playerB: string;
+  scoreA: number;
+  scoreB: number;
+  minute: number;
+  isLive: boolean;
+  source: 'msport.com';
+  period: number | null;
+  periodName: string | null;
+}
+
 interface MsportOutcome {
   description: string;  // "Over 6.5" | "Under 6.5"
   id: string;           // "12" = over, "13" = under
@@ -422,6 +434,89 @@ export async function getMsportSchedule(): Promise<Array<{
     });
 }
 
+// ── Live Score ────────────────────────────────────────────────────────────────
+
+const DETAIL_URL = 'https://www.msport.com/api/gh/facts-center/query/frontend/match/detail';
+
+// Kis cache: eventId → {data, ts}  (10 mp TTL, meccs max 12 perc)
+const detailCache = new Map<string, { data: MsportLiveScore | null; ts: number }>();
+const DETAIL_CACHE_TTL = 10_000; // 10 másodperc
+
+async function fetchMatchDetail(eventId: string): Promise<MsportLiveScore | null> {
+  const cached = detailCache.get(eventId);
+  if (cached && Date.now() - cached.ts < DETAIL_CACHE_TTL) return cached.data;
+
+  try {
+    await tryAutoSession();
+    const resp = await axios.get(DETAIL_URL, {
+      headers: buildHeaders(),
+      params: { eventId },
+      timeout: 8_000,
+    });
+    const d = resp.data?.data;
+    if (!d || resp.data?.bizCode !== 10000) {
+      detailCache.set(eventId, { data: null, ts: Date.now() });
+      return null;
+    }
+
+    // status: 0 = upcoming, 1 = live, 2 = ended
+    if (d.status < 1) {
+      detailCache.set(eventId, { data: null, ts: Date.now() });
+      return null;
+    }
+
+    // Score: "1:4" → scoreA=1, scoreB=4
+    const scoreMatch = (d.scoreOfWholeMatch || '').match(/^(\d+):(\d+)$/);
+    if (!scoreMatch) {
+      detailCache.set(eventId, { data: null, ts: Date.now() });
+      return null;
+    }
+
+    // Játékosnevek kinyerése: "Real Madrid (Liam)" → "liam"
+    const playerA = extractPlayerName(d.homeTeam || '').toLowerCase();
+    const playerB = extractPlayerName(d.awayTeam || '').toLowerCase();
+    if (!playerA || !playerB) {
+      detailCache.set(eventId, { data: null, ts: Date.now() });
+      return null;
+    }
+
+    // Menetidő: "10'00\"" → 10, "6'44\"" → 6
+    const timeStr = d.totalPlayedTime || d.playedTime || '';
+    const minMatch = timeStr.match(/^(\d+)'/);
+    const minute = minMatch ? parseInt(minMatch[1]) : 0;
+
+    const result: MsportLiveScore = {
+      playerA,
+      playerB,
+      scoreA: parseInt(scoreMatch[1]),
+      scoreB: parseInt(scoreMatch[2]),
+      minute,
+      isLive: d.status === 1,
+      source: 'msport.com',
+      period: 1,   // eAdriatic/GT: egységes meccs (nincs félidő)
+      periodName: `${minute}'`,
+    };
+
+    detailCache.set(eventId, { data: result, ts: Date.now() });
+    console.log(`[msport-live] ✅ ${playerA} vs ${playerB} → ${d.scoreOfWholeMatch} (${minute}')`);
+    return result;
+  } catch (e: any) {
+    console.warn(`[msport-live] ⚠️ detail hiba (${eventId}): ${e.message}`);
+    detailCache.set(eventId, { data: null, ts: Date.now() });
+    return null;
+  }
+}
+
+/**
+ * Lekéri az élő meccsek gólállását msport detail API-n keresztül.
+ * @param eventIds  A napi accumulatorból szűrt, jelenleg élő meccsek eventId listája
+ */
+export async function getMsportLiveScores(eventIds: string[]): Promise<MsportLiveScore[]> {
+  if (eventIds.length === 0) return [];
+  const results = await Promise.all(eventIds.map(id => fetchMatchDetail(id)));
+  return results.filter((r): r is MsportLiveScore => r !== null);
+}
+
 /**
  * Debug: nyers API válasz (GET /api/msport-debug)
  */
@@ -438,7 +533,7 @@ export async function getMsportRawDebug(): Promise<unknown> {
       ];
       const parsed = parseEvents(allEvents);
 
-      // Első 2 event nyers market adatai — segít diagnosztizálni a status/isActive problémát
+      // Első 2 event nyers market adatai
       const rawMarketSample = allEvents.slice(0, 2).map(ev => ({
         homeTeam: ev.homeTeam,
         awayTeam: ev.awayTeam,
@@ -449,16 +544,34 @@ export async function getMsportRawDebug(): Promise<unknown> {
         })),
       }));
 
+      // Első élő event TELJES nyers struktúrája (score mezők megismeréséhez)
+      const liveEvents: any[] = d?.liveMatches ?? [];
+      const rawLiveSample = liveEvents.slice(0, 2).map(ev => {
+        // Mindent visszaadunk, kivéve a markets tömböt (azt külön mutatjuk)
+        const { markets, ...rest } = ev;
+        return { ...rest, marketsCount: markets?.length ?? 0 };
+      });
+
+      // "events" kulcs vizsgálata — lehet live score adatforrás
+      const eventsKey: any[] = d?.events ?? [];
+      const rawEventsSample = eventsKey.slice(0, 3).map(ev => {
+        const { markets, ...rest } = ev ?? {};
+        return { ...rest, marketsCount: markets?.length ?? 0 };
+      });
+
       return {
         ok: true,
         bizCode: resp.data?.bizCode,
         comingSoonsCount: d?.comingSoons?.length ?? 0,
         liveMatchesCount: d?.liveMatches?.length ?? 0,
         matchesCount: d?.matches?.length ?? 0,
+        eventsKeyCount: eventsKey.length,
         totalEventsCount: allEvents.length,
         parsedOddsCount: parsed.length,
         parsedOdds: parsed.slice(0, 5),
         rawMarketSample,
+        rawLiveSample,       // ← élő meccsek teljes struktúrája (score mezők!)
+        rawEventsSample,     // ← "events" kulcs tartalma
         dataKeys: Object.keys(d ?? {}),
       };
     } catch (e: any) {

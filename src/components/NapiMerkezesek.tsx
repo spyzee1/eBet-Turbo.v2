@@ -225,6 +225,7 @@ export default function NapiMerkezesek() {
   const [matches, setMatches] = useState<DailyMatch[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [sortDesc, setSortDesc] = useState(true); // csökkenő = alapértelmezett
 
   const load = useCallback(async (date: string) => {
     setLoading(true);
@@ -247,16 +248,19 @@ export default function NapiMerkezesek() {
     load(selectedDate);
   }, [selectedDate, load]);
 
-  // Auto-refresh 30 mp-enként (csak mai dátumnál érdemes)
+  // Auto-refresh 5 percenként (csak mai dátumnál érdemes)
   useEffect(() => {
     const today = todayInputValue();
     if (selectedDate !== today) return;
-    const id = setInterval(() => load(selectedDate), 30_000);
+    const id = setInterval(() => load(selectedDate), 5 * 60_000);
     return () => clearInterval(id);
   }, [selectedDate, load]);
 
-  const gtMatches = matches.filter(m => m.league === 'GT Leagues');
-  const adriaticMatches = matches.filter(m => m.league === 'eAdriatic League');
+  const sortFn = (a: DailyMatch, b: DailyMatch) =>
+    sortDesc ? b.startTime - a.startTime : a.startTime - b.startTime;
+
+  const gtMatches = matches.filter(m => m.league === 'GT Leagues').sort(sortFn);
+  const adriaticMatches = matches.filter(m => m.league === 'eAdriatic League').sort(sortFn);
 
   return (
     <div className="space-y-5">
@@ -273,6 +277,33 @@ export default function NapiMerkezesek() {
           className="bg-dark-card border border-dark-border rounded-lg px-3 py-1.5 text-sm text-white
                      focus:outline-none focus:border-orange-400 cursor-pointer"
         />
+
+        {/* Frissítés gomb */}
+        <button
+          onClick={() => load(selectedDate)}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition cursor-pointer
+                     bg-dark-card border-dark-border text-slate-400 hover:text-white hover:border-slate-500
+                     disabled:opacity-40 disabled:cursor-not-allowed"
+          title="Kézi frissítés"
+        >
+          <span className={loading ? 'animate-spin inline-block' : ''}>↻</span>
+          Frissítés
+        </button>
+
+        {/* Idősorrend toggle */}
+        <button
+          onClick={() => setSortDesc(d => !d)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition cursor-pointer
+                     bg-dark-card border-dark-border text-slate-400 hover:text-white hover:border-slate-500"
+          title="Idősorrend váltása"
+        >
+          {sortDesc ? (
+            <>↓ Csökkenő</>
+          ) : (
+            <>↑ Növekvő</>
+          )}
+        </button>
 
         {/* Statisztika */}
         <div className="flex items-center gap-3 text-xs text-slate-500">
@@ -355,7 +386,7 @@ export default function NapiMerkezesek() {
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-green/30 border border-green/50 inline-block" /> Live / épp folyamatban</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-yellow-500/20 border border-yellow-500/40 inline-block" /> &lt;15 percen belül kezd</span>
         <span className="flex items-center gap-1 opacity-50"><span className="w-2 h-2 rounded bg-dark-border inline-block" /> Lejátszott meccs</span>
-        <span className="ml-auto text-slate-700">Az oldal 30 mp-enként automatikusan frissül</span>
+        <span className="ml-auto text-slate-700">Az oldal 5 percenként automatikusan frissül</span>
       </div>
     </div>
   );

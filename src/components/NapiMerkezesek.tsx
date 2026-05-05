@@ -192,6 +192,12 @@ function MatchCard({ match }: { match: DailyMatch }) {
                   <span className={`font-mono w-14 shrink-0 ${isToday ? 'text-orange-400 font-bold' : 'text-slate-600'}`}>
                     {m.date.slice(0, 5)} {/* "MM/DD" */}
                   </span>
+                  {/* Win/Loss badge */}
+                  <span className={`shrink-0 font-bold w-4 text-center ${
+                    m.resultA === 'win' ? 'text-green' : m.resultA === 'loss' ? 'text-red-400' : 'text-yellow-400'
+                  }`}>
+                    {m.resultA === 'win' ? 'Gy' : m.resultA === 'loss' ? 'V' : 'D'}
+                  </span>
                   {/* Eredmény */}
                   <span className={`font-mono font-bold shrink-0 ${resultColor}`}>
                     {m.scoreA}–{m.scoreB}

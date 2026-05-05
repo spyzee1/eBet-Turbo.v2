@@ -55,6 +55,8 @@ type SortMode = 'time' | 'probability';
 const CHECKED_GREEN_KEY = 'checked_green_matches';
 const CHECKED_RED_KEY = 'checked_red_matches';
 const BETTING_JOURNAL_KEY = 'betting_journal';
+const LIVE_SCORES_CACHE_KEY = 'live_scores_cache';
+const LAST_KNOWN_LIVE_KEY = 'last_known_live_map';
 
 interface CheckedMatch {
   matchId: string;
@@ -75,7 +77,7 @@ export default function TopTips({ onAddMatch }: Props) {
   const [data, setData] = useState<TopTipsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [selectedLeagues, setSelectedLeagues] = useState<Set<string>>(new Set(['Esoccer Battle']));
+  const [selectedLeagues, setSelectedLeagues] = useState<Set<string>>(new Set(['GT Leagues', 'eAdriatic League']));
   const [limit, setLimit] = useState(20);
   const [sortMode, setSortMode] = useState<SortMode>('time');
   const [h2hModal, setH2hModal] = useState<{ a: string; b: string; lg: string } | null>(null);
@@ -186,23 +188,57 @@ export default function TopTips({ onAddMatch }: Props) {
     setLoading(true);
     setError('');
     try {
-      const leagueFilter = selectedLeagues.size === 1 
-        ? Array.from(selectedLeagues)[0] 
-        : undefined;
-      
-      const result = await fetchTopTips(leagueFilter, limit, strategy);
+      let result: TopTipsResponse;
+
+      if (selectedLeagues.size === 0) {
+        // Szűrő nélkül: minden liga
+        result = await fetchTopTips(undefined, limit, strategy);
+      } else if (selectedLeagues.size === 1) {
+        // Egyetlen liga: közvetlen szűrés
+        result = await fetchTopTips(Array.from(selectedLeagues)[0], limit, strategy);
+      } else {
+        // Több liga: párhuzamos lekérés, eredmények összefűzése
+        // → mindkét liga teljes meccslistáját megkapjuk, nem csak a top-N keresztmetszetét
+        const leagueArr = Array.from(selectedLeagues);
+        const settled = await Promise.allSettled(
+          leagueArr.map(l => fetchTopTips(l, limit, strategy))
+        );
+        const allTips = settled
+          .filter((r): r is PromiseFulfilledResult<TopTipsResponse> => r.status === 'fulfilled')
+          .flatMap(r => r.value.tips);
+        const base = settled.find(r => r.status === 'fulfilled') as PromiseFulfilledResult<TopTipsResponse> | undefined;
+        result = base
+          ? { ...base.value, tips: allTips }
+          : { tips: [], generated: new Date().toISOString(), totalScanned: 0, totalAnalyzed: 0, totalValueBets: 0 };
+      }
+
       setData(result);
     } catch {
       setError('Nem sikerült betölteni. Ellenőrizd a szervert (port 3005).');
     } finally {
       setLoading(false);
     }
-  }, [selectedLeagues, limit, strategy]); // ← strategy dependency!
+  }, [selectedLeagues, limit, strategy]);
 
   // ── Live score polling (10 másodpercenként) ────────────────────────────────
-  const [liveScores, setLiveScores] = useState<LiveScore[]>([]);
+  const [liveScores, setLiveScores] = useState<LiveScore[]>(() => {
+    try {
+      const stored = localStorage.getItem(LIVE_SCORES_CACHE_KEY);
+      if (!stored) return [];
+      const parsed = JSON.parse(stored);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
+  });
   // Utolsó ismert live score minden meccshez (auto Win/Loss detektáláshoz)
-  const lastKnownLive = useRef<Map<string, LiveScore>>(new Map());
+  const lastKnownLive = useRef<Map<string, LiveScore>>((() => {
+    try {
+      const stored = localStorage.getItem(LAST_KNOWN_LIVE_KEY);
+      if (!stored) return new Map<string, LiveScore>();
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) return new Map<string, LiveScore>(parsed as [string, LiveScore][]);
+      return new Map<string, LiveScore>();
+    } catch { return new Map<string, LiveScore>(); }
+  })());
 
   useEffect(() => {
     let cancelled = false;
@@ -296,6 +332,12 @@ export default function TopTips({ onAddMatch }: Props) {
         }
 
         setLiveScores(scores);
+
+        // Perzisztencia: liveScores + lastKnownLive mentése localStorage-ba
+        try {
+          localStorage.setItem(LIVE_SCORES_CACHE_KEY, JSON.stringify(scores));
+          localStorage.setItem(LAST_KNOWN_LIVE_KEY, JSON.stringify(Array.from(lastKnownLive.current.entries())));
+        } catch { /* silent */ }
       } catch { /* silent */ }
     };
     poll();
@@ -614,8 +656,12 @@ export default function TopTips({ onAddMatch }: Props) {
 
           tips = tips.filter(tip => !checkedRed.has(getMatchId(tip)));
 
-          // Több liga esetén: csak a következő 45 perc meccseit mutassa
-          if (selectedLeagues.size >= 2) {
+          // Több liga esetén: ha tartalmaz nem-msport ligát, 45-perces ablak
+          // GT + eAdriatic esetén nincs időablak (mindkét liga folyamatosan megy)
+          const msportOnlySelected =
+            selectedLeagues.size >= 2 &&
+            Array.from(selectedLeagues).every(l => l === 'GT Leagues' || l === 'eAdriatic League');
+          if (selectedLeagues.size >= 2 && !msportOnlySelected) {
             tips = tips.filter(tip => {
               const diff = minutesFromNow(tip.time);
               return diff >= -5 && diff <= 45;
@@ -688,7 +734,7 @@ export default function TopTips({ onAddMatch }: Props) {
                           <span className="ml-1 text-[10px] text-slate-600">várakozás...</span>
                         </span>
                       ) : (
-                        <span className={`text-sm font-semibold whitespace-nowrap ${tip.oddsSource === 'vegas.hu' ? 'text-green-400' : tip.oddsSource === 'bet365' ? 'text-blue-400' : tip.oddsSource === 'msport.com' ? 'text-sky-400' : 'text-accent-light'}`}>
+                        <span className={`text-sm font-semibold whitespace-nowrap ${tip.oddsSource === 'vegas.hu' ? 'text-green-400' : tip.oddsSource === 'bet365' ? 'text-blue-400' : tip.oddsSource === 'msport.com' ? 'text-sky-400' : tip.oddsSource === 'cloudbet' ? 'text-orange-400' : 'text-accent-light'}`}>
                           O/U {tip.ouLine}
                           {tip.oddsSource === 'vegas.hu' && (
                             <>
@@ -711,6 +757,16 @@ export default function TopTips({ onAddMatch }: Props) {
                             </>
                           )}
                           {tip.oddsSource === 'bet365' && <span className="ml-1 text-[10px] text-blue-500">b365</span>}
+                          {tip.oddsSource === 'cloudbet' && (
+                            <>
+                              <span className="ml-1 text-[10px] text-orange-400">cloudbet</span>
+                              {tip.oddsOver && tip.oddsOver > 1 && (
+                                <span className="ml-2 text-[11px] font-mono text-orange-400">
+                                  ↑{tip.oddsOver.toFixed(2)} ↓{(tip.oddsUnder ?? 0).toFixed(2)}
+                                </span>
+                              )}
+                            </>
+                          )}
                         </span>
                       )}
                       <span className={`text-sm whitespace-nowrap ${hasGolValue ? 'border border-green rounded px-2 py-0.5' : ''}`}>

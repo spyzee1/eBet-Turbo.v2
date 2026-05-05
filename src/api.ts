@@ -375,6 +375,8 @@ export interface TrendSignal {
   aboveLineCount: number;
   lastTwoAboveLine: boolean;
   signalStrength: 'VALUE' | 'TREND';
+  yesterdayAvg?: number;
+  prevDayAvg?: number;
 }
 
 export interface TrendScannerStatus {

@@ -29,6 +29,8 @@ export interface TrendSignal {
   aboveLineCount: number;
   lastTwoAboveLine: boolean;
   signalStrength: 'VALUE' | 'TREND';
+  yesterdayAvg?: number;   // tegnapi H2H gólátlag (ugyanez a pár)
+  prevDayAvg?: number;     // tegnap előtti H2H gólátlag
 }
 
 interface TrendScannerState {
@@ -84,6 +86,27 @@ function todayMMDD(): string {
   const mm = String(now.getMonth() + 1).padStart(2, '0');
   const dd = String(now.getDate()).padStart(2, '0');
   return `${mm}/${dd}`;
+}
+
+function offsetMMDD(offsetDays: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${mm}/${dd}`;
+}
+
+function h2hAvgForDate(
+  lastMatches: Array<{ date: string; opponent: string; scoreHome: number; scoreAway: number }>,
+  datePrefix: string,
+  opponentName: string,
+): number | undefined {
+  const matches = lastMatches.filter(m =>
+    m.date.startsWith(datePrefix) &&
+    m.opponent.toLowerCase() === opponentName.toLowerCase()
+  );
+  if (matches.length === 0) return undefined;
+  return matches.reduce((s, m) => s + m.scoreHome + m.scoreAway, 0) / matches.length;
 }
 
 function trendKey(signal: TrendSignal): string {
@@ -167,6 +190,10 @@ export async function runTrendScan(deps: TrendScannerDeps): Promise<TrendSignal[
       const slope = calcSlope(totals);
       const avgTotalGoals = totals.reduce((s, v) => s + v, 0) / totals.length;
 
+      // Tegnapi és tegnap előtti gólátlag (ugyanez a pár)
+      const yesterdayAvg = h2hAvgForDate(statsA.lastMatches, offsetMMDD(-1), match.playerAway);
+      const prevDayAvg   = h2hAvgForDate(statsA.lastMatches, offsetMMDD(-2), match.playerAway);
+
       // Hány mai meccs volt a vonal felett
       const aboveLineCount = totals.filter(t => t > ouLine).length;
       const aboveLinePct = aboveLineCount / totals.length;
@@ -202,6 +229,8 @@ export async function runTrendScan(deps: TrendScannerDeps): Promise<TrendSignal[
         aboveLineCount,
         lastTwoAboveLine,
         signalStrength: isTrend ? 'TREND' : 'VALUE',
+        yesterdayAvg,
+        prevDayAvg,
       });
     } catch { /* skip */ }
   }

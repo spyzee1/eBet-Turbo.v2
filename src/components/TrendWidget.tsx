@@ -6,6 +6,70 @@ const CHECKED_GREEN_KEY  = 'checked_green_matches';
 const BETTING_JOURNAL_KEY = 'betting_journal';
 const TREND_RED_KEY      = 'trend_red';
 
+/** Mini vonaldiagram a mai gólszámokból — a rajzon látható séma szerint */
+function GoalSparkline({ matches, ouLine }: {
+  matches: Array<{ total: number }>;
+  ouLine: number;
+}) {
+  const W = 220, H = 64, PAD_X = 18, PAD_Y = 14;
+  const vals = matches.map(m => m.total);
+  const minV = Math.max(0, Math.min(...vals) - 1);
+  const maxV = Math.max(...vals) + 1;
+  const range = maxV - minV || 1;
+
+  const x = (i: number) => PAD_X + (i / Math.max(vals.length - 1, 1)) * (W - PAD_X * 2);
+  const y = (v: number) => PAD_Y + (1 - (v - minV) / range) * (H - PAD_Y * 2);
+
+  const points = vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+
+  // O/U vonal Y koordinátája
+  const lineY = y(ouLine);
+
+  return (
+    <div className="flex justify-center mb-2">
+      <svg width={W} height={H} className="overflow-visible">
+        {/* O/U referencia vonal */}
+        <line
+          x1={PAD_X} y1={lineY} x2={W - PAD_X} y2={lineY}
+          stroke="#475569" strokeWidth="1" strokeDasharray="3,3"
+        />
+        {/* Összekötő vonalak */}
+        <polyline
+          points={points}
+          fill="none"
+          stroke="#e2e8f0"
+          strokeWidth="2"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+        {/* Pontok + értékek */}
+        {vals.map((v, i) => {
+          const cx = x(i), cy = y(v);
+          const above = v > ouLine;
+          return (
+            <g key={i}>
+              <circle
+                cx={cx} cy={cy} r={4}
+                fill={above ? '#22c55e' : '#ef4444'}
+                stroke="#1e293b" strokeWidth="1.5"
+              />
+              <text
+                x={cx} y={cy - 7}
+                textAnchor="middle"
+                fontSize="10"
+                fontWeight="bold"
+                fill={above ? '#86efac' : '#fca5a5'}
+              >
+                {v}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
 function leagueBadge(l: string) {
   if (l === 'GT Leagues')              return 'bg-green/20 text-green';
   if (l === 'Esoccer Battle')          return 'bg-yellow/20 text-yellow';
@@ -311,11 +375,16 @@ function TrendCard({ signal, isGreen, isRed, onGreen, onRed }: TrendCardProps) {
       </div>
 
       {/* Sor 2: Játékos nevek — NAGY — KÖZÉPRE */}
-      <div className="flex items-center justify-center gap-3 mb-3">
+      <div className="flex items-center justify-center gap-3 mb-2">
         <span className="text-xl font-black text-white uppercase tracking-wide select-text cursor-text">{signal.playerA}</span>
         <span className="text-slate-500 text-base font-normal select-none">vs</span>
         <span className="text-xl font-black text-white uppercase tracking-wide select-text cursor-text">{signal.playerB}</span>
       </div>
+
+      {/* Sor 2b: Sparkline — mai gólok vizuálisan */}
+      {signal.todayH2H.length >= 2 && (
+        <GoalSparkline matches={signal.todayH2H} ouLine={signal.ouLine} />
+      )}
 
       {/* Sor 3: H2H gólsorozat — KÖZÉPRE, nevek alá szimmetrikusan */}
       <div className="flex justify-center items-center gap-1 flex-wrap mb-3">
@@ -341,7 +410,7 @@ function TrendCard({ signal, isGreen, isRed, onGreen, onRed }: TrendCardProps) {
       </div>
 
       {/* Sor 4: Statisztikák — szellős, vízszintesen — KÖZÉPRE */}
-      <div className="flex justify-center items-center gap-6 mb-4">
+      <div className="flex justify-center items-center gap-6 mb-2">
         <div className="text-center">
           <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Vonal</div>
           <div className="text-lg font-bold text-white">{signal.ouLine}</div>
@@ -363,6 +432,27 @@ function TrendCard({ signal, isGreen, isRed, onGreen, onRed }: TrendCardProps) {
           <div className="text-lg font-bold text-white">{signal.avgTotalGoals.toFixed(1)} gól</div>
         </div>
       </div>
+
+      {/* Sor 4b: Tegnapi és tegnap előtti gólátlag */}
+      {(signal.yesterdayAvg !== undefined || signal.prevDayAvg !== undefined) && (
+        <div className="flex justify-center items-center gap-4 mb-3 text-[11px]">
+          {signal.prevDayAvg !== undefined && (
+            <span className="text-slate-500">
+              Tegnap előtti Gólatlag{' '}
+              <span className="font-bold text-slate-300">{signal.prevDayAvg.toFixed(1)}</span>
+            </span>
+          )}
+          {signal.prevDayAvg !== undefined && signal.yesterdayAvg !== undefined && (
+            <span className="text-slate-700">·</span>
+          )}
+          {signal.yesterdayAvg !== undefined && (
+            <span className="text-slate-500">
+              Tegnapi Gólatlag{' '}
+              <span className="font-bold text-slate-300">{signal.yesterdayAvg.toFixed(1)}</span>
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Sor 5: OVER badge (bal) + pipák (jobb) — egy sorban */}
       <div className="flex items-center justify-between">

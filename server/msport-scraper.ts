@@ -5,6 +5,7 @@
 // ============================================================================
 
 import axios from 'axios';
+import * as cheerio from 'cheerio';
 
 // ── Cookie manager ────────────────────────────────────────────────────────────
 // Az msport.com API JavaScript-által beállított session tokent igényel (bizCode 19000 nélkül).
@@ -179,7 +180,28 @@ interface MsportResponse {
 
 interface Cache { data: MsportOdds[]; ts: number; }
 let cache: Cache | null = null;
-const CACHE_TTL = 30_000; // 30 másodperc
+const CACHE_TTL       = 10 * 60_000;   // 10 perc normál frissítés
+const RATE_LIMIT_TTL  = 30 * 60_000;  // 30 perc backoff ha 429-et kapunk
+
+// ── Közös rate-limit állapot — MINDEN msport API hívásra (live, fixtures, upcoming) ──
+// Cloudflare IP-szinten blokkol → ha egyszer 429, az összes endpoint tiltva van.
+let _rateLimitedUntil = 0; // epoch ms
+
+function isMsportRateLimited(): boolean {
+  return Date.now() < _rateLimitedUntil;
+}
+
+function markMsportRateLimited(): void {
+  _rateLimitedUntil = Date.now() + RATE_LIMIT_TTL;
+  console.warn(`[msport] 🔴 429 rate limit → ${RATE_LIMIT_TTL / 60_000} perces backoff (minden msport endpoint blokkolva)`);
+}
+
+function rateLimitRemainingS(): number {
+  return Math.max(0, Math.round((_rateLimitedUntil - Date.now()) / 1000));
+}
+
+// ── In-flight dedup: ne menjen 2 párhuzamos kérés egyszerre ──────────────────
+let _oddsInFlight: Promise<MsportOdds[]> | null = null;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -316,35 +338,64 @@ async function fetchFromUrl(url: string): Promise<MsportOdds[]> {
 }
 
 export async function getMsportOdds(): Promise<MsportOdds[]> {
-  if (cache && Date.now() - cache.ts < CACHE_TTL) return cache.data;
+  const now = Date.now();
 
-  // Minden ismert URL-t megpróbálunk, az eredményeket összevonjuk (eventId alapján deduplikálva)
-  const seen = new Set<string>();
-  const allOdds: MsportOdds[] = [];
-
-  for (const url of API_URL_CANDIDATES) {
-    try {
-      const odds = await fetchFromUrl(url);
-      let added = 0;
-      for (const o of odds) {
-        const key = o.eventId || `${o.playerA}|${o.playerB}|${o.startTime}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          allOdds.push(o);
-          added++;
-        }
-      }
-      console.log(`[msport] ✅ ${url.includes('live') ? 'live' : url.includes('upcoming') ? 'upcoming' : 'matches'} API: ${odds.length} odds (+${added} új)`);
-      // Ha az első (live) URL elég eredményt adott, nem próbálunk tovább
-      if (allOdds.length >= 10) break;
-    } catch (e: any) {
-      console.warn(`[msport] ⚠️ API hiba (${e.message}): ${url.slice(-40)}`);
+  // Ha rate-limitedek vagyunk, adjuk vissza a stale cache-t (vagy ürestet)
+  if (isMsportRateLimited()) {
+    const remaining = rateLimitRemainingS();
+    if (cache) {
+      console.log(`[msport] rate-limit backoff ${remaining}s → stale cache (${cache.data.length} odds)`);
+      return cache.data;
     }
+    console.log(`[msport] rate-limit backoff ${remaining}s → nincs cache, üres lista`);
+    return [];
   }
 
-  console.log(`[msport] összesen ${allOdds.length} odds (GT: ${allOdds.filter(o => o.league === 'GT Leagues').length}, eAdr: ${allOdds.filter(o => o.league === 'eAdriatic League').length})`);
-  cache = { data: allOdds, ts: Date.now() };
-  return allOdds;
+  // Friss cache
+  if (cache && now - cache.ts < CACHE_TTL) return cache.data;
+
+  // Ha már folyamatban van egy kérés, várjuk meg azt (ne küldjünk duplikát)
+  if (_oddsInFlight) return _oddsInFlight;
+
+  _oddsInFlight = (async () => {
+    const seen = new Set<string>();
+    const allOdds: MsportOdds[] = [];
+    let hit429 = false;
+
+    for (const url of API_URL_CANDIDATES) {
+      try {
+        const odds = await fetchFromUrl(url);
+        let added = 0;
+        for (const o of odds) {
+          const key = o.eventId || `${o.playerA}|${o.playerB}|${o.startTime}`;
+          if (!seen.has(key)) { seen.add(key); allOdds.push(o); added++; }
+        }
+        console.log(`[msport] ✅ ${url.includes('live') ? 'live' : url.includes('upcoming') ? 'upcoming' : 'matches'} API: ${odds.length} odds (+${added} új)`);
+        if (allOdds.length >= 10) break;
+      } catch (e: any) {
+        const status = e.response?.status ?? 0;
+        if (status === 429 || String(e.message).includes('429')) {
+          hit429 = true;
+          markMsportRateLimited();
+          break; // nem próbálunk több URL-t sem
+        }
+        console.warn(`[msport] ⚠️ API hiba (${e.message}): ${url.slice(-40)}`);
+      }
+    }
+
+    if (hit429) {
+      _oddsInFlight = null;
+      // Stale cache-t adunk vissza ha van
+      return cache?.data ?? [];
+    }
+
+    console.log(`[msport] összesen ${allOdds.length} odds (GT: ${allOdds.filter(o => o.league === 'GT Leagues').length}, eAdr: ${allOdds.filter(o => o.league === 'eAdriatic League').length})`);
+    cache = { data: allOdds, ts: Date.now() };
+    _oddsInFlight = null;
+    return allOdds;
+  })();
+
+  return _oddsInFlight;
 }
 
 /**
@@ -425,13 +476,110 @@ export async function getMsportSchedule(): Promise<Array<{
       return {
         playerHome: o.playerA,
         playerAway: o.playerB,
-        teamHome:   o.teamA,   // pl. "Manchester City FC"
+        teamHome:   o.teamA,
         teamAway:   o.teamB,
         league: o.league,
         time: `${hh}:${min}`,
         date: `${mm}/${dd}`,
       };
     });
+}
+
+// ── Upcoming schedule from fixtures API (rate-limit safe) ─────────────────────
+// A live-matches API Cloudflare-védett → helyette a my-matches/fixtures API
+// közelgő meccseit használjuk menetrend forrásként.
+// Ez NEM hív live-matches endpointot → nincs 429 kockázat.
+
+let _upcomingCache: { data: Array<{
+  playerHome: string; playerAway: string;
+  teamHome: string;   teamAway: string;
+  league: string; time: string; date: string;
+  startTime: number; eventId: string;
+}>; ts: number } | null = null;
+const UPCOMING_CACHE_TTL = 3 * 60_000; // 3 perces cache
+
+export async function getMsportUpcomingSchedule(): Promise<Array<{
+  playerHome: string; playerAway: string;
+  teamHome: string;   teamAway: string;
+  league: string; time: string; date: string;
+  startTime: number; eventId: string;
+}>> {
+  if (_upcomingCache && Date.now() - _upcomingCache.ts < UPCOMING_CACHE_TTL) {
+    return _upcomingCache.data;
+  }
+
+  // Rate-limit védelem — ha Cloudflare blokkolt, stale cache-t adunk vissza
+  if (isMsportRateLimited()) {
+    console.log(`[msport-upcoming] rate-limit backoff ${rateLimitRemainingS()}s → stale cache`);
+    return _upcomingCache?.data ?? [];
+  }
+
+  const now = Date.now();
+  const start = now - 30 * 60_000;   // 30 perccel ezelőtt (folyamatban lévő meccsek)
+  const end   = now + 4 * 3600_000;  // 4 óra előre
+
+  try {
+    await tryAutoSession();
+    const resp = await axios.get(MY_FIXTURES_API, {
+      headers: buildHeaders(),
+      params: { sportId: 'sr:sport:137', start, end },
+      timeout: 15_000,
+    });
+
+    if (resp.data?.bizCode !== 10000) {
+      console.warn(`[msport-upcoming] bizCode ${resp.data?.bizCode}`);
+      return _upcomingCache?.data ?? [];
+    }
+
+    const azLeagues: any[] = resp.data?.data?.azLeagues ?? [];
+    const results: typeof _upcomingCache.data = [];
+
+    for (const leagueGroup of azLeagues) {
+      const leagueName = TOURNAMENT_MAP[leagueGroup.tournamentId as string] ?? null;
+      if (!leagueName) continue;
+
+      for (const ev of (leagueGroup.events ?? [])) {
+        if ((ev.status ?? 0) >= 3) continue; // csak upcoming (0) és live (1,2)
+
+        const playerA = extractPlayerName(ev.homeTeam || '');
+        const playerB = extractPlayerName(ev.awayTeam || '');
+        if (!playerA || !playerB) continue;
+
+        // Budapest CEST (UTC+2)
+        const d = new Date((ev.startTime || 0) + 2 * 3600_000);
+        const mm  = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const dd  = String(d.getUTCDate()).padStart(2, '0');
+        const hh  = String(d.getUTCHours()).padStart(2, '0');
+        const min = String(d.getUTCMinutes()).padStart(2, '0');
+
+        results.push({
+          playerHome: playerA,
+          playerAway: playerB,
+          teamHome:   extractTeamName(ev.homeTeam || ''),
+          teamAway:   extractTeamName(ev.awayTeam || ''),
+          league:     leagueName,
+          time:       `${hh}:${min}`,
+          date:       `${mm}/${dd}`,
+          startTime:  ev.startTime || 0,
+          eventId:    ev.eventId   || '',
+        });
+      }
+    }
+
+    results.sort((a, b) => a.startTime - b.startTime);
+    const gt  = results.filter(r => r.league === 'GT Leagues').length;
+    const eAd = results.filter(r => r.league === 'eAdriatic League').length;
+    console.log(`[msport-upcoming] ✅ ${results.length} közelgő meccs (GT: ${gt}, eAdr: ${eAd})`);
+    _upcomingCache = { data: results, ts: Date.now() };
+    return results;
+  } catch (e: any) {
+    const status = (e as any).response?.status ?? 0;
+    if (status === 429 || String(e.message).includes('429')) {
+      markMsportRateLimited();
+    }
+    console.warn(`[msport-upcoming] ⚠️ hiba: ${e.message}`);
+    return _upcomingCache?.data ?? [];
+  }
 }
 
 // ── Live Score ────────────────────────────────────────────────────────────────
@@ -494,7 +642,7 @@ async function fetchMatchDetail(eventId: string): Promise<MsportLiveScore | null
       isLive: d.status === 1,
       source: 'msport.com',
       period: 1,   // eAdriatic/GT: egységes meccs (nincs félidő)
-      periodName: `${minute}'`,
+      periodName: null,  // null = frontend kezeli: csak {minute}' jelenik meg (volt: "${minute}'" → duplikálta)
     };
 
     detailCache.set(eventId, { data: result, ts: Date.now() });
@@ -515,6 +663,418 @@ export async function getMsportLiveScores(eventIds: string[]): Promise<MsportLiv
   if (eventIds.length === 0) return [];
   const results = await Promise.all(eventIds.map(id => fetchMatchDetail(id)));
   return results.filter((r): r is MsportLiveScore => r !== null);
+}
+
+// ── Match Results (lezárt meccsek előzménye) ──────────────────────────────────
+// GT Leagues (sr:tournament:33496) és eAdriatic League (sr:tournament:39749)
+// Több endpoint-variánst próbálunk — az msport API verzióktól függően változhat.
+
+const BASE = 'https://www.msport.com/api/gh/facts-center/query/frontend';
+const MSPORT_LEAGUES = [
+  { id: 'sr:tournament:33496', league: 'GT Leagues'       },
+  { id: 'sr:tournament:39749', league: 'eAdriatic League' },
+] as const;
+
+function buildResultsUrls(tournamentId: string): string[] {
+  const q = `sportId=sr:sport:137&tournamentId=${tournamentId}&pageSize=500`;
+  return [
+    `${BASE}/results/list?${q}`,
+    `${BASE}/match/list?${q}&matchStatus=3`,
+    `${BASE}/match/list?${q}&type=2`,
+    `${BASE}/finished-matches/list?${q}`,
+  ];
+}
+
+export interface MsportMatchResult {
+  eventId:   string;
+  playerA:   string;   // home játékos neve (kisbetű)
+  playerB:   string;   // away játékos neve
+  teamA:     string;
+  teamB:     string;
+  scoreA:    number;   // home gólok
+  scoreB:    number;   // away gólok
+  startTime: number;   // Unix ms
+  league:    string;
+  date:      string;   // "MM/DD HH:MM" Budapest-helyi idő
+}
+
+// 3 perces cache — az eredmények nem változnak gyorsan
+let resultsCache: { data: MsportMatchResult[]; ts: number } | null = null;
+const RESULTS_TTL = 3 * 60 * 1000;
+
+// ── Injected completed matches (score accumulator) ────────────────────────────
+// A background poller (index.ts) tölti fel: minden végbement meccs után
+// a match/detail API-ból szerzett végső eredményt ide injektálja.
+// Így getMsportMatchResults() visszaadja az aznapi meccseket is — anélkül,
+// hogy létezne egy dedikált "results/list" endpoint az msport-on.
+const _injectedCompleted: MsportMatchResult[] = [];
+
+/**
+ * Injektál lezárt meccseket az in-memory tárolóba.
+ * Hívja: index.ts pollCompletedMatchScores() 60 mp-enként.
+ * @returns hány új meccs került be (deduplikálva eventId alapján)
+ */
+export function injectCompletedMatches(matches: MsportMatchResult[]): number {
+  const seen = new Set(_injectedCompleted.map(m => m.eventId));
+  let added = 0;
+  for (const m of matches) {
+    if (!seen.has(m.eventId)) {
+      _injectedCompleted.push(m);
+      seen.add(m.eventId);
+      added++;
+    }
+  }
+  if (added > 0) {
+    console.log(`[msport-accum] +${added} completed match(es) injected (total: ${_injectedCompleted.length})`);
+  }
+  return added;
+}
+
+/** Napi tisztítás: régi napok rekordjainak eltávolítása (Budapest UTC+2 dátum szerint) */
+export function clearOldInjectedMatches(): void {
+  const now = Date.now();
+  const yesterdayMs = now - 3 * 24 * 60 * 60 * 1000; // 3 napnál régebbiek (volt: 30 óra)
+  const before = _injectedCompleted.length;
+  _injectedCompleted.splice(0, _injectedCompleted.length,
+    ..._injectedCompleted.filter(m => m.startTime >= yesterdayMs)
+  );
+  const removed = before - _injectedCompleted.length;
+  if (removed > 0) console.log(`[msport-accum] ${removed} régi rekord törölve, ${_injectedCompleted.length} maradt`);
+}
+
+function parseResultEvents(data: any, league: string): MsportMatchResult[] {
+  const out: MsportMatchResult[] = [];
+  // Lehetséges kulcsok a válaszban
+  const arr: any[] = [
+    ...(data?.results         ?? []),
+    ...(data?.matches         ?? []),
+    ...(data?.finishedMatches ?? []),
+    ...(data?.events          ?? []),
+    ...(data?.list            ?? []),
+  ];
+  for (const ev of arr) {
+    // Score kinyerése különböző mezőkből
+    const raw =
+      ev.scoreOfWholeMatch ||
+      ev.score             ||
+      (ev.result ? `${ev.result.homeScore ?? ''}:${ev.result.awayScore ?? ''}` : '') ||
+      (ev.homeScore !== undefined ? `${ev.homeScore}:${ev.awayScore}` : '');
+    const sm = raw.match(/^(\d+):(\d+)$/);
+    if (!sm) continue;
+
+    const playerA = extractPlayerName(ev.homeTeam || '').toLowerCase();
+    const playerB = extractPlayerName(ev.awayTeam || '').toLowerCase();
+    if (!playerA || !playerB) continue;
+
+    // Dátum Budapest-helyi időben (UTC+2)
+    const d = new Date((ev.startTime || 0) + 2 * 3600 * 1000);
+    const date = `${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')} ` +
+                 `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
+
+    out.push({
+      eventId:   ev.eventId || '',
+      playerA,
+      playerB,
+      teamA:     extractTeamName(ev.homeTeam || ''),
+      teamB:     extractTeamName(ev.awayTeam || ''),
+      scoreA:    parseInt(sm[1]),
+      scoreB:    parseInt(sm[2]),
+      startTime: ev.startTime || 0,
+      league,
+      date,
+    });
+  }
+  return out;
+}
+
+// ── My-Matches Fixtures API ───────────────────────────────────────────────────
+// MŰKÖDŐ endpoint (2026-05 felfedezve DevTools Network tab-bal):
+// GET /api/gh/facts-center/query/frontend/my-matches/fixtures
+//     ?sportId=sr:sport:137&start={unixMs}&end={unixMs}
+//
+// Visszaadja a lezárt meccsek eredményeit liganként (azLeagues tömb).
+// status=3 vagy 4 → befejezett meccs, scoreOfWholeMatch = "4:2" formátum.
+// Ez az esoccerbet.org-hoz hasonló "scraping" de API alapon — sokkal megbízhatóbb.
+// HTML scraping nem működik (SPA / JavaScript-renderelt oldal).
+//
+// [DEPRECATED, NOT WORKING] Fixture Page HTML scraper was here but page is SPA.
+
+// My-Matches Fixtures API endpoint
+const MY_FIXTURES_API = 'https://www.msport.com/api/gh/facts-center/query/frontend/my-matches/fixtures';
+
+// 15 perces cache — ritka frissítés, nem terheli az API-t
+let myFixturesCache: { data: MsportMatchResult[]; ts: number } | null = null;
+const MY_FIXTURES_CACHE_TTL = 15 * 60 * 1000;
+
+/**
+ * Lezárt meccsek lekérése a my-matches/fixtures API-ból.
+ * Visszaadja az utolsó `daysBack` nap összes befejezett meccsét
+ * GT Leagues + eAdriatic League ligákból.
+ *
+ * API struktúra:
+ *   data.azLeagues[].events[] → minden lezárt meccs
+ *   status 3 vagy 4 = befejezett
+ *   scoreOfWholeMatch = "4:2"
+ *   tournamentId → liga azonosítás
+ */
+export async function getMsportMyFixtures(daysBack: number = 14): Promise<MsportMatchResult[]> {
+  if (myFixturesCache && Date.now() - myFixturesCache.ts < MY_FIXTURES_CACHE_TTL) {
+    return myFixturesCache.data;
+  }
+
+  // Rate-limit védelem — ha Cloudflare blokkolt, stale cache-t adunk vissza
+  if (isMsportRateLimited()) {
+    console.log(`[msport-fixtures] rate-limit backoff ${rateLimitRemainingS()}s → stale cache (${myFixturesCache?.data.length ?? 0} meccs)`);
+    return myFixturesCache?.data ?? [];
+  }
+
+  const now = Date.now();
+  const start = now - daysBack * 24 * 3600_000;
+  const end   = now + 2 * 3600_000; // +2h buffer (folyamatban lévő meccsek)
+
+  try {
+    await tryAutoSession();
+    const resp = await axios.get(MY_FIXTURES_API, {
+      headers: buildHeaders(),
+      params: { sportId: 'sr:sport:137', start, end },
+      timeout: 15_000,
+    });
+
+    if (resp.data?.bizCode !== 10000) {
+      console.warn(`[msport-fixtures] bizCode ${resp.data?.bizCode}`);
+      return myFixturesCache?.data ?? [];
+    }
+
+    const azLeagues: any[] = resp.data?.data?.azLeagues ?? [];
+    const results: MsportMatchResult[] = [];
+
+    for (const leagueGroup of azLeagues) {
+      // Liga azonosítás tournamentId alapján (megbízhatóbb mint a szöveg)
+      const leagueName = TOURNAMENT_MAP[leagueGroup.tournamentId as string] ?? null;
+      if (!leagueName) continue; // csak GT Leagues + eAdriatic
+
+      for (const ev of (leagueGroup.events ?? [])) {
+        // Csak befejezett meccsek: status 3 = ended, 4 = abandoned/walkover
+        if ((ev.status ?? 0) < 3) continue;
+
+        // Végeredmény: "4:2" formátum
+        const sm = (ev.scoreOfWholeMatch || '').match(/^(\d+):(\d+)$/);
+        if (!sm) continue;
+
+        const playerA = extractPlayerName(ev.homeTeam || '').toLowerCase();
+        const playerB = extractPlayerName(ev.awayTeam || '').toLowerCase();
+        if (!playerA || !playerB) continue;
+
+        // Budapest CEST (UTC+2) dátum string
+        const d = new Date((ev.startTime || 0) + 2 * 3600_000);
+        const date =
+          `${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')} ` +
+          `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
+
+        results.push({
+          eventId:   ev.eventId   || '',
+          playerA,
+          playerB,
+          teamA:     extractTeamName(ev.homeTeam || ''),
+          teamB:     extractTeamName(ev.awayTeam || ''),
+          scoreA:    parseInt(sm[1]),
+          scoreB:    parseInt(sm[2]),
+          startTime: ev.startTime || 0,
+          league:    leagueName,
+          date,
+        });
+      }
+    }
+
+    const gt  = results.filter(r => r.league === 'GT Leagues').length;
+    const eAd = results.filter(r => r.league === 'eAdriatic League').length;
+    console.log(`[msport-fixtures] ✅ ${results.length} lezárt meccs (GT: ${gt}, eAdr: ${eAd}, utolsó ${daysBack} nap)`);
+    myFixturesCache = { data: results, ts: Date.now() };
+    return results;
+  } catch (e: any) {
+    const status = (e as any).response?.status ?? 0;
+    if (status === 429 || String(e.message).includes('429')) {
+      markMsportRateLimited();
+    }
+    console.warn(`[msport-fixtures] ⚠️ hiba: ${e.message}`);
+    return myFixturesCache?.data ?? [];
+  }
+}
+
+/** Fixture cache törlése (pl. cookie változtatás után) */
+export function clearFixtureCache(): void {
+  myFixturesCache = null;
+}
+
+// scrapeMsportFixtures alias — backward compat (HTML scraper volt, most API-t hív)
+export const scrapeMsportFixtures = getMsportMyFixtures;
+
+/**
+ * GT Leagues + eAdriatic League lezárt meccsek lekérése msport-ból.
+ * 3 perces cache. Ha minden API endpoint sikertelen → csak az injected store marad.
+ *
+ * FONTOS: Az msport-on nincs dedikált "results" endpoint, ezért ez a függvény
+ * valószínűleg mindig üres API-választ kap. A tényleges adatok az
+ * _injectedCompleted tömbből jönnek (pollCompletedMatchScores() tölti, index.ts).
+ */
+export async function getMsportMatchResults(): Promise<MsportMatchResult[]> {
+  // Segédfüggvény: injected + fixture adatokat deduplikálva mergeljük
+  // Dedup: player páros + startTime közelisége (90mp tűrés)
+  const mergeWithInjected = (base: MsportMatchResult[]): MsportMatchResult[] => {
+    const extra = _injectedCompleted.filter(inj =>
+      !base.some(b =>
+        b.playerA === inj.playerA && b.playerB === inj.playerB &&
+        Math.abs(b.startTime - inj.startTime) < 90_000
+      )
+    );
+    return [...base, ...extra];
+  };
+
+  // ── 1. Fixture oldal HTML scraper (elsődleges forrás) ───────────────────
+  // Ez az esoccerbet.org-hoz hasonló HTML scraping.
+  // Nem igényel persistence-t: az oldal mindig tartalmazza az aznapi + tegnapi meccseket.
+  // Ha sikeres → nincs szükség API-ra vagy accumulatorra.
+  try {
+    const fixtureData = await scrapeMsportFixtures();
+    if (fixtureData.length > 0) {
+      console.log(`[msport-results] ✅ fixture scraper: ${fixtureData.length} meccs`);
+      return mergeWithInjected(fixtureData);
+    }
+  } catch (e: any) {
+    console.warn(`[msport-results] ⚠️ fixture scraper hiba: ${e.message}`);
+  }
+
+  // ── 2. Fallback: API endpoints (valószínűleg nem léteznek) ───────────────
+  if (resultsCache && Date.now() - resultsCache.ts < RESULTS_TTL) {
+    return mergeWithInjected(resultsCache.data);
+  }
+
+  // Ha rate-limitedek vagyunk, ne próbáljunk több API kérést
+  if (isMsportRateLimited()) {
+    return mergeWithInjected(resultsCache?.data ?? []);
+  }
+
+  await tryAutoSession();
+  const all: MsportMatchResult[] = [];
+  let hit429Fallback = false;
+
+  for (const { id: tournamentId, league } of MSPORT_LEAGUES) {
+    if (hit429Fallback) break;
+    for (const url of buildResultsUrls(tournamentId)) {
+      try {
+        const resp = await axios.get(url, { headers: buildHeaders(), timeout: 10_000 });
+        if (resp.data?.bizCode !== 10000) continue;
+        const parsed = parseResultEvents(resp.data.data, league);
+        if (parsed.length > 0) {
+          console.log(`[msport-results] ✅ API: ${league}: ${parsed.length} meccs`);
+          all.push(...parsed);
+          break;
+        }
+      } catch (e: any) {
+        const status = (e as any).response?.status ?? 0;
+        if (status === 429 || String(e.message).includes('429')) {
+          markMsportRateLimited();
+          hit429Fallback = true;
+          break;
+        }
+        // egyéb hiba: silent — következő URL-t próbáljuk
+      }
+    }
+  }
+
+  // ── 3. Fallback: csak injected accumulator ───────────────────────────────
+  const injectedCount = _injectedCompleted.filter(m => !all.some(r => r.eventId === m.eventId)).length;
+  console.log(`[msport-results] API: ${all.length}, injected: ${injectedCount} meccs (fixture scraper sikertelen)`);
+  resultsCache = { data: all, ts: Date.now() };
+  return mergeWithInjected(all);
+}
+
+/**
+ * Egy játékos legutóbbi meccseinek listája msport-ból.
+ * Kompatibilis a scraper.ts MatchEntry formátumával.
+ */
+export async function getMsportPlayerLastMatches(
+  playerName: string,
+  league: string,
+): Promise<Array<{
+  date: string; opponent: string; opponentTeam: string; team: string;
+  scoreHome: number; scoreAway: number; result: 'win'|'loss'|'draw';
+}>> {
+  const all = await getMsportMatchResults();
+  const pn = playerName.toLowerCase().trim();
+
+  const matches: Array<{
+    date: string; opponent: string; opponentTeam: string; team: string;
+    scoreHome: number; scoreAway: number; result: 'win'|'loss'|'draw';
+    startTime: number;
+  }> = [];
+
+  for (const m of all) {
+    if (league && m.league !== league) continue;
+    const isHome = m.playerA === pn;
+    const isAway = m.playerB === pn;
+    if (!isHome && !isAway) continue;
+
+    const scoreHome  = isHome ? m.scoreA : m.scoreB;
+    const scoreAway  = isHome ? m.scoreB : m.scoreA;
+    const opponent   = isHome ? m.playerB : m.playerA;
+    const team       = isHome ? m.teamA   : m.teamB;
+    const oppTeam    = isHome ? m.teamB   : m.teamA;
+    const result: 'win'|'loss'|'draw' =
+      scoreHome > scoreAway ? 'win' : scoreHome < scoreAway ? 'loss' : 'draw';
+
+    matches.push({ date: m.date, opponent, opponentTeam: oppTeam, team, scoreHome, scoreAway, result, startTime: m.startTime });
+  }
+
+  // Legújabb elöl
+  matches.sort((a, b) => b.startTime - a.startTime);
+  return matches.slice(0, 50);
+}
+
+/**
+ * H2H meccsek visszaadása msport-ból (Napi Mérkőzések kártyákhoz + TopTips H2H panel).
+ * Fallback: ha msport üres, a hívó oldal esoccerbet.org-ra eshet vissza.
+ */
+export async function getMsportH2H(
+  playerA: string,
+  playerB: string,
+  league?: string,
+): Promise<{
+  matches:    Array<{ date: string; scoreA: number; scoreB: number; totalGoals: number; resultA: 'win'|'loss'|'draw' }>;
+  avgGoals:   number | null;
+  todayCount: number;
+}> {
+  const all = await getMsportMatchResults();
+  const nA = playerA.toLowerCase().trim();
+  const nB = playerB.toLowerCase().trim();
+
+  const matched = all
+    .filter(m => !league || m.league === league)
+    .filter(m => {
+      const mA = m.playerA, mB = m.playerB;
+      return (mA === nA && mB === nB) || (mA === nB && mB === nA);
+    })
+    .map(m => {
+      const fwd = m.playerA === nA;
+      const scoreA    = fwd ? m.scoreA : m.scoreB;
+      const scoreB    = fwd ? m.scoreB : m.scoreA;
+      const totalGoals = scoreA + scoreB;
+      const resultA: 'win'|'loss'|'draw' = scoreA > scoreB ? 'win' : scoreA < scoreB ? 'loss' : 'draw';
+      return { date: m.date, scoreA, scoreB, totalGoals, resultA, startTime: m.startTime };
+    })
+    .sort((a, b) => b.startTime - a.startTime)
+    .slice(0, 10)
+    .map(({ startTime: _st, ...rest }) => rest);
+
+  const avgGoals = matched.length > 0
+    ? matched.reduce((s, m) => s + m.totalGoals, 0) / matched.length
+    : null;
+
+  const now = new Date();
+  const todayPrefix = `${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')}`;
+  const todayCount = matched.filter(m => m.date.startsWith(todayPrefix)).length;
+
+  return { matches: matched, avgGoals, todayCount };
 }
 
 /**

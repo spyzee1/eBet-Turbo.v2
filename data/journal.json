@@ -4551,5 +4551,2534 @@
     "strategy": "A",
     "result": "Win",
     "finalScore": "1:5"
+  },
+  {
+    "matchId": "Jetli-Snail-17:00",
+    "tip": {
+      "time": "17:00",
+      "date": "05/02",
+      "league": "GT Leagues",
+      "playerA": "Jetli",
+      "teamA": "Sl Benfica",
+      "playerB": "Snail",
+      "teamB": "FC Barcelona",
+      "valueBet": "UNDER",
+      "confidence": 0.9154947401109573,
+      "edge": 0.18905086393812098,
+      "stake": 150,
+      "winEselyA": 0.5069203440996384,
+      "winEselyB": 0.4930796559003616,
+      "overEsely": 0.26747087519231383,
+      "underEsely": 0.7325291248076862,
+      "vartGol": 4.3362,
+      "ouLine": 5.5,
+      "ajanlottTipp": "UNDER | conf 92% | edge 18.9% | Over/Under",
+      "h2hMode": false,
+      "h2hTotal": 3,
+      "h2hWinsA": 2,
+      "h2hWinsB": 1,
+      "h2hSource": "esoccerbet",
+      "oddsSource": "msport.com",
+      "oddsA": 1.81,
+      "oddsB": 1.97,
+      "oddsOver": 1.71,
+      "oddsUnder": 1.84,
+      "category": "STRONG_BET",
+      "warning": null,
+      "h2hOverRates": {
+        "0.5": 1,
+        "1.5": 0.3333333333333333,
+        "2.5": 0.3333333333333333,
+        "3.5": 0.3333333333333333,
+        "4.5": 0.3333333333333333,
+        "5.5": 0,
+        "6.5": 0,
+        "7.5": 0
+      },
+      "h2hEffectiveSize": 3,
+      "strategy": "A",
+      "lastMatchesA": [
+        {
+          "opponent": "razvan",
+          "scoreHome": 3,
+          "scoreAway": 1,
+          "result": "win",
+          "date": "05/02 11:15"
+        },
+        {
+          "opponent": "professor",
+          "scoreHome": 2,
+          "scoreAway": 3,
+          "result": "loss",
+          "date": "05/02 11:00"
+        },
+        {
+          "opponent": "snail",
+          "scoreHome": 1,
+          "scoreAway": 4,
+          "result": "loss",
+          "date": "05/02 10:30"
+        },
+        {
+          "opponent": "tifosi",
+          "scoreHome": 0,
+          "scoreAway": 3,
+          "result": "loss",
+          "date": "05/02 10:15"
+        },
+        {
+          "opponent": "razvan",
+          "scoreHome": 3,
+          "scoreAway": 1,
+          "result": "win",
+          "date": "05/02 10:00"
+        },
+        {
+          "opponent": "professor",
+          "scoreHome": 2,
+          "scoreAway": 1,
+          "result": "win",
+          "date": "05/02 09:45"
+        },
+        {
+          "opponent": "snail",
+          "scoreHome": 1,
+          "scoreAway": 0,
+          "result": "win",
+          "date": "05/02 09:15"
+        },
+        {
+          "opponent": "tifosi",
+          "scoreHome": 2,
+          "scoreAway": 4,
+          "result": "loss",
+          "date": "05/02 09:00"
+        },
+        {
+          "opponent": "razvan",
+          "scoreHome": 1,
+          "scoreAway": 2,
+          "result": "loss",
+          "date": "05/02 08:45"
+        },
+        {
+          "opponent": "professor",
+          "scoreHome": 0,
+          "scoreAway": 2,
+          "result": "loss",
+          "date": "05/02 08:30"
+        }
+      ],
+      "lastMatchesB": [
+        {
+          "opponent": "professor",
+          "scoreHome": 1,
+          "scoreAway": 4,
+          "result": "loss",
+          "date": "05/02 11:15"
+        },
+        {
+          "opponent": "tifosi",
+          "scoreHome": 2,
+          "scoreAway": 2,
+          "result": "draw",
+          "date": "05/02 11:00"
+        },
+        {
+          "opponent": "razvan",
+          "scoreHome": 3,
+          "scoreAway": 1,
+          "result": "win",
+          "date": "05/02 10:45"
+        },
+        {
+          "opponent": "jetli",
+          "scoreHome": 4,
+          "scoreAway": 1,
+          "result": "win",
+          "date": "05/02 10:30"
+        },
+        {
+          "opponent": "professor",
+          "scoreHome": 1,
+          "scoreAway": 2,
+          "result": "loss",
+          "date": "05/02 10:00"
+        },
+        {
+          "opponent": "tifosi",
+          "scoreHome": 2,
+          "scoreAway": 2,
+          "result": "draw",
+          "date": "05/02 09:45"
+        },
+        {
+          "opponent": "razvan",
+          "scoreHome": 2,
+          "scoreAway": 0,
+          "result": "win",
+          "date": "05/02 09:30"
+        },
+        {
+          "opponent": "jetli",
+          "scoreHome": 0,
+          "scoreAway": 1,
+          "result": "loss",
+          "date": "05/02 09:15"
+        },
+        {
+          "opponent": "professor",
+          "scoreHome": 2,
+          "scoreAway": 3,
+          "result": "loss",
+          "date": "05/02 08:45"
+        },
+        {
+          "opponent": "tifosi",
+          "scoreHome": 1,
+          "scoreAway": 2,
+          "result": "loss",
+          "date": "05/02 08:30"
+        }
+      ],
+      "gfPerMatchA": 1.89,
+      "gaPerMatchA": 2,
+      "gfPerMatchB": 2,
+      "gaPerMatchB": 2.14,
+      "h2hMatchHistory": [
+        {
+          "date": "05/02 10:30",
+          "goalsA": 1,
+          "goalsB": 4,
+          "winner": "B"
+        },
+        {
+          "date": "05/02 09:15",
+          "goalsA": 1,
+          "goalsB": 0,
+          "winner": "A"
+        },
+        {
+          "date": "05/02 08:00",
+          "goalsA": 1,
+          "goalsB": 0,
+          "winner": "A"
+        }
+      ]
+    },
+    "timestamp": 1777734000000,
+    "date": "2026-05-02",
+    "betType": "Under",
+    "betLine": 5.5,
+    "odds": 1.84,
+    "stake": 2000,
+    "strategy": "A"
+  },
+  {
+    "matchId": "Snail-Professor-17:45",
+    "tip": {
+      "time": "17:45",
+      "date": "05/02",
+      "league": "GT Leagues",
+      "playerA": "Snail",
+      "teamA": "FC Barcelona",
+      "playerB": "Professor",
+      "teamB": "SSC Napoli",
+      "valueBet": "UNDER",
+      "confidence": 0.95,
+      "edge": 0.22320453313372268,
+      "stake": 150,
+      "winEselyA": 0.14285714285714285,
+      "winEselyB": 0.8571428571428571,
+      "overEsely": 0.2476949377657481,
+      "underEsely": 0.7523050622342519,
+      "vartGol": 4.3990779751063,
+      "ouLine": 5.5,
+      "ajanlottTipp": "UNDER | conf 95% | edge 22.3% | Over/Under",
+      "h2hMode": true,
+      "h2hTotal": 5,
+      "h2hWinsA": 0,
+      "h2hWinsB": 5,
+      "h2hSource": "esoccerbet",
+      "oddsSource": "msport.com",
+      "oddsA": 1.94,
+      "oddsB": 1.83,
+      "oddsOver": 1.67,
+      "oddsUnder": 1.89,
+      "category": "STRONG_BET",
+      "warning": null,
+      "h2hOverRates": {
+        "0.5": 1,
+        "1.5": 1,
+        "2.5": 1,
+        "3.5": 0.6009220248937008,
+        "4.5": 0.6009220248937008,
+        "5.5": 0.1972339253188977,
+        "6.5": 0,
+        "7.5": 0
+      },
+      "h2hEffectiveSize": 4.9,
+      "strategy": "A",
+      "lastMatchesA": [
+        {
+          "opponent": "jetli",
+          "scoreHome": 3,
+          "scoreAway": 0,
+          "result": "win",
+          "date": "05/02 12:00"
+        },
+        {
+          "opponent": "professor",
+          "scoreHome": 1,
+          "scoreAway": 4,
+          "result": "loss",
+          "date": "05/02 11:15"
+        },
+        {
+          "opponent": "tifosi",
+          "scoreHome": 2,
+          "scoreAway": 2,
+          "result": "draw",
+          "date": "05/02 11:00"
+        },
+        {
+          "opponent": "razvan",
+          "scoreHome": 3,
+          "scoreAway": 1,
+          "result": "win",
+          "date": "05/02 10:45"
+        },
+        {
+          "opponent": "jetli",
+          "scoreHome": 4,
+          "scoreAway": 1,
+          "result": "win",
+          "date": "05/02 10:30"
+        },
+        {
+          "opponent": "professor",
+          "scoreHome": 1,
+          "scoreAway": 2,
+          "result": "loss",
+          "date": "05/02 10:00"
+        },
+        {
+          "opponent": "tifosi",
+          "scoreHome": 2,
+          "scoreAway": 2,
+          "result": "draw",
+          "date": "05/02 09:45"
+        },
+        {
+          "opponent": "razvan",
+          "scoreHome": 2,
+          "scoreAway": 0,
+          "result": "win",
+          "date": "05/02 09:30"
+        },
+        {
+          "opponent": "jetli",
+          "scoreHome": 0,
+          "scoreAway": 1,
+          "result": "loss",
+          "date": "05/02 09:15"
+        },
+        {
+          "opponent": "professor",
+          "scoreHome": 2,
+          "scoreAway": 3,
+          "result": "loss",
+          "date": "05/02 08:45"
+        }
+      ],
+      "lastMatchesB": [
+        {
+          "opponent": "razvan",
+          "scoreHome": 3,
+          "scoreAway": 1,
+          "result": "win",
+          "date": "05/02 11:30"
+        },
+        {
+          "opponent": "snail",
+          "scoreHome": 4,
+          "scoreAway": 1,
+          "result": "win",
+          "date": "05/02 11:15"
+        },
+        {
+          "opponent": "jetli",
+          "scoreHome": 3,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/02 11:00"
+        },
+        {
+          "opponent": "tifosi",
+          "scoreHome": 2,
+          "scoreAway": 3,
+          "result": "loss",
+          "date": "05/02 10:45"
+        },
+        {
+          "opponent": "razvan",
+          "scoreHome": 2,
+          "scoreAway": 4,
+          "result": "loss",
+          "date": "05/02 10:15"
+        },
+        {
+          "opponent": "snail",
+          "scoreHome": 2,
+          "scoreAway": 1,
+          "result": "win",
+          "date": "05/02 10:00"
+        },
+        {
+          "opponent": "jetli",
+          "scoreHome": 1,
+          "scoreAway": 2,
+          "result": "loss",
+          "date": "05/02 09:45"
+        },
+        {
+          "opponent": "tifosi",
+          "scoreHome": 1,
+          "scoreAway": 2,
+          "result": "loss",
+          "date": "05/02 09:30"
+        },
+        {
+          "opponent": "razvan",
+          "scoreHome": 2,
+          "scoreAway": 3,
+          "result": "loss",
+          "date": "05/02 09:00"
+        },
+        {
+          "opponent": "snail",
+          "scoreHome": 3,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/02 08:45"
+        }
+      ],
+      "gfPerMatchA": 2,
+      "gaPerMatchA": 2.13,
+      "gfPerMatchB": 1.78,
+      "gaPerMatchB": 1.85,
+      "h2hMatchHistory": [
+        {
+          "date": "05/02 11:15",
+          "goalsA": 1,
+          "goalsB": 4,
+          "winner": "B"
+        },
+        {
+          "date": "05/02 10:00",
+          "goalsA": 1,
+          "goalsB": 2,
+          "winner": "B"
+        },
+        {
+          "date": "05/02 08:45",
+          "goalsA": 2,
+          "goalsB": 3,
+          "winner": "B"
+        },
+        {
+          "date": "05/01 07:28",
+          "goalsA": 2,
+          "goalsB": 4,
+          "winner": "B"
+        },
+        {
+          "date": "05/01 06:14",
+          "goalsA": 0,
+          "goalsB": 3,
+          "winner": "B"
+        }
+      ]
+    },
+    "timestamp": 1777736700000,
+    "date": "2026-05-02",
+    "betType": "Under",
+    "betLine": 5.5,
+    "odds": 1.89,
+    "stake": 2000,
+    "strategy": "A"
+  },
+  {
+    "matchId": "Leon-Rossi-13:00",
+    "tip": {
+      "time": "13:00",
+      "date": "05/04",
+      "league": "GT Leagues",
+      "playerA": "Leon",
+      "teamA": "Real Madrid",
+      "playerB": "Rossi",
+      "teamB": "Manchester City FC",
+      "valueBet": "PASS",
+      "confidence": 0.5298127255601879,
+      "edge": 0,
+      "stake": 0,
+      "winEselyA": 0.5302910329489232,
+      "winEselyB": 0.4697089670510768,
+      "overEsely": 0.3761385665345808,
+      "underEsely": 0.6238614334654192,
+      "vartGol": 3.015,
+      "ouLine": 3.5,
+      "ajanlottTipp": "PASS",
+      "h2hMode": false,
+      "h2hTotal": 2,
+      "h2hWinsA": 0,
+      "h2hWinsB": 1,
+      "h2hSource": "msport.com",
+      "oddsSource": "msport.com",
+      "oddsA": 1.57,
+      "oddsB": 2.36,
+      "oddsOver": 1.99,
+      "oddsUnder": 1.59,
+      "category": "NO_BET",
+      "warning": null,
+      "h2hOverRates": {
+        "0.5": 1,
+        "1.5": 1,
+        "2.5": 0.5,
+        "3.5": 0,
+        "4.5": 0,
+        "5.5": 0,
+        "6.5": 0,
+        "7.5": 0
+      },
+      "h2hEffectiveSize": 2,
+      "strategy": "A",
+      "lastMatchesA": [
+        {
+          "opponent": "rossi",
+          "scoreHome": 1,
+          "scoreAway": 2,
+          "result": "loss",
+          "date": "05/04 11:45"
+        },
+        {
+          "opponent": "habibi",
+          "scoreHome": 2,
+          "scoreAway": 2,
+          "result": "draw",
+          "date": "05/04 11:30"
+        },
+        {
+          "opponent": "rossi",
+          "scoreHome": 1,
+          "scoreAway": 1,
+          "result": "draw",
+          "date": "05/04 10:30"
+        },
+        {
+          "opponent": "habibi",
+          "scoreHome": 2,
+          "scoreAway": 0,
+          "result": "win",
+          "date": "05/04 10:15"
+        }
+      ],
+      "lastMatchesB": [
+        {
+          "opponent": "jose",
+          "scoreHome": 2,
+          "scoreAway": 2,
+          "result": "draw",
+          "date": "05/04 12:15"
+        },
+        {
+          "opponent": "leon",
+          "scoreHome": 2,
+          "scoreAway": 1,
+          "result": "win",
+          "date": "05/04 11:45"
+        },
+        {
+          "opponent": "hulk",
+          "scoreHome": 1,
+          "scoreAway": 3,
+          "result": "loss",
+          "date": "05/04 11:30"
+        },
+        {
+          "opponent": "jose",
+          "scoreHome": 1,
+          "scoreAway": 1,
+          "result": "draw",
+          "date": "05/04 11:00"
+        },
+        {
+          "opponent": "leon",
+          "scoreHome": 1,
+          "scoreAway": 1,
+          "result": "draw",
+          "date": "05/04 10:30"
+        },
+        {
+          "opponent": "hulk",
+          "scoreHome": 1,
+          "scoreAway": 1,
+          "result": "draw",
+          "date": "05/04 10:15"
+        }
+      ],
+      "gfPerMatchA": 1.5,
+      "gaPerMatchA": 1.25,
+      "gfPerMatchB": 1.3333333333333333,
+      "gaPerMatchB": 1.5,
+      "h2hMatchHistory": [
+        {
+          "date": "05/04 11:45",
+          "goalsA": 1,
+          "goalsB": 2,
+          "winner": "B"
+        },
+        {
+          "date": "05/04 10:30",
+          "goalsA": 1,
+          "goalsB": 1,
+          "winner": "draw"
+        }
+      ]
+    },
+    "timestamp": 1777892400000,
+    "date": "2026-05-04",
+    "betType": "Under",
+    "betLine": 3.5,
+    "odds": 1.59,
+    "stake": 1000,
+    "strategy": "A",
+    "result": "Loss",
+    "finalScore": "3:3"
+  },
+  {
+    "matchId": "Sensei-Fred-13:00",
+    "tip": {
+      "time": "13:00",
+      "date": "05/04",
+      "league": "GT Leagues",
+      "playerA": "Sensei",
+      "teamA": "Real Betis",
+      "playerB": "Fred",
+      "teamB": "PAOK",
+      "valueBet": "OVER",
+      "confidence": 0.95,
+      "edge": 0.3006493506493506,
+      "stake": 150,
+      "winEselyA": 0.5,
+      "winEselyB": 0.5,
+      "overEsely": 0.95,
+      "underEsely": 0.050000000000000044,
+      "vartGol": 7.5600000000000005,
+      "ouLine": 2.5,
+      "ajanlottTipp": "OVER | conf 95% | edge 30.1% | Over/Under",
+      "h2hMode": false,
+      "h2hTotal": 0,
+      "h2hWinsA": 0,
+      "h2hWinsB": 0,
+      "h2hSource": "esoccerbet",
+      "oddsSource": "msport.com",
+      "oddsA": 1.89,
+      "oddsB": 1.89,
+      "oddsOver": 1.54,
+      "oddsUnder": 2.07,
+      "category": "STRONG_BET",
+      "warning": "Magas edge kis H2H mintán — óvatosan",
+      "h2hEffectiveSize": 0,
+      "strategy": "A",
+      "lastMatchesA": [],
+      "lastMatchesB": [],
+      "gfPerMatchA": 3.5,
+      "gaPerMatchA": 3.5,
+      "gfPerMatchB": 3.5,
+      "gaPerMatchB": 3.5
+    },
+    "timestamp": 1777892400000,
+    "date": "2026-05-04",
+    "betType": "Over",
+    "betLine": 2.5,
+    "odds": 1.54,
+    "stake": 1000,
+    "strategy": "A",
+    "result": "Win",
+    "finalScore": "4:3"
+  },
+  {
+    "matchId": "Gabriel-Leonardo-13:00",
+    "tip": {
+      "time": "13:00",
+      "date": "05/04",
+      "league": "eAdriatic League",
+      "playerA": "Gabriel",
+      "teamA": "Atletico Madrid",
+      "playerB": "Leonardo",
+      "teamB": "Manchester City FC",
+      "valueBet": "PASS",
+      "confidence": 0.5193423443571628,
+      "edge": 0,
+      "stake": 0,
+      "winEselyA": 0.71436185202833,
+      "winEselyB": 0.28563814797167003,
+      "overEsely": 0.5085646264876799,
+      "underEsely": 0.49143537351232014,
+      "vartGol": 6.72,
+      "ouLine": 6.5,
+      "ajanlottTipp": "PASS",
+      "h2hMode": false,
+      "h2hTotal": 2,
+      "h2hWinsA": 2,
+      "h2hWinsB": 0,
+      "h2hSource": "msport.com",
+      "oddsSource": "msport.com",
+      "oddsA": 1.35,
+      "oddsB": 3.14,
+      "oddsOver": 1.94,
+      "oddsUnder": 1.68,
+      "category": "NO_BET",
+      "warning": null,
+      "h2hOverRates": {
+        "0.5": 1,
+        "1.5": 1,
+        "2.5": 1,
+        "3.5": 1,
+        "4.5": 1,
+        "5.5": 1,
+        "6.5": 1,
+        "7.5": 1
+      },
+      "h2hEffectiveSize": 2,
+      "strategy": "A",
+      "lastMatchesA": [
+        {
+          "opponent": "donatello",
+          "scoreHome": 6,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 12:30"
+        },
+        {
+          "opponent": "mateo",
+          "scoreHome": 5,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 12:00"
+        },
+        {
+          "opponent": "leonardo",
+          "scoreHome": 6,
+          "scoreAway": 4,
+          "result": "win",
+          "date": "05/04 11:45"
+        },
+        {
+          "opponent": "noah",
+          "scoreHome": 2,
+          "scoreAway": 2,
+          "result": "draw",
+          "date": "05/04 11:30"
+        },
+        {
+          "opponent": "donatello",
+          "scoreHome": 6,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 11:15"
+        },
+        {
+          "opponent": "mateo",
+          "scoreHome": 3,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 10:45"
+        },
+        {
+          "opponent": "leonardo",
+          "scoreHome": 6,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 10:30"
+        },
+        {
+          "opponent": "noah",
+          "scoreHome": 4,
+          "scoreAway": 3,
+          "result": "win",
+          "date": "05/04 10:15"
+        }
+      ],
+      "lastMatchesB": [
+        {
+          "opponent": "mateo",
+          "scoreHome": 3,
+          "scoreAway": 3,
+          "result": "draw",
+          "date": "05/04 12:30"
+        },
+        {
+          "opponent": "noah",
+          "scoreHome": 5,
+          "scoreAway": 3,
+          "result": "win",
+          "date": "05/04 12:15"
+        },
+        {
+          "opponent": "gabriel",
+          "scoreHome": 4,
+          "scoreAway": 6,
+          "result": "loss",
+          "date": "05/04 11:45"
+        },
+        {
+          "opponent": "donatello",
+          "scoreHome": 2,
+          "scoreAway": 2,
+          "result": "draw",
+          "date": "05/04 11:30"
+        },
+        {
+          "opponent": "mateo",
+          "scoreHome": 4,
+          "scoreAway": 1,
+          "result": "win",
+          "date": "05/04 11:15"
+        },
+        {
+          "opponent": "noah",
+          "scoreHome": 5,
+          "scoreAway": 1,
+          "result": "win",
+          "date": "05/04 11:00"
+        },
+        {
+          "opponent": "gabriel",
+          "scoreHome": 2,
+          "scoreAway": 6,
+          "result": "loss",
+          "date": "05/04 10:30"
+        },
+        {
+          "opponent": "donatello",
+          "scoreHome": 3,
+          "scoreAway": 5,
+          "result": "loss",
+          "date": "05/04 10:15"
+        }
+      ],
+      "gfPerMatchA": 4.75,
+      "gaPerMatchA": 2.375,
+      "gfPerMatchB": 3.5,
+      "gaPerMatchB": 3.375,
+      "h2hMatchHistory": [
+        {
+          "date": "05/04 11:45",
+          "goalsA": 6,
+          "goalsB": 4,
+          "winner": "A"
+        },
+        {
+          "date": "05/04 10:30",
+          "goalsA": 6,
+          "goalsB": 2,
+          "winner": "A"
+        }
+      ]
+    },
+    "timestamp": 1777892400000,
+    "date": "2026-05-04",
+    "betType": "Over",
+    "betLine": 6.5,
+    "odds": 1.94,
+    "stake": 1000,
+    "strategy": "A",
+    "result": "Loss",
+    "finalScore": "2:1"
+  },
+  {
+    "matchId": "Haidan-Iron-13:05",
+    "tip": {
+      "time": "13:05",
+      "date": "05/04",
+      "league": "eAdriatic League",
+      "playerA": "Haidan",
+      "teamA": "SS Lazio",
+      "playerB": "Iron",
+      "teamB": "SSC Napoli",
+      "valueBet": "UNDER",
+      "confidence": 0.5022947989451039,
+      "edge": 0.057291758228063316,
+      "stake": 150,
+      "winEselyA": 0.5922409891741429,
+      "winEselyB": 0.4077590108258572,
+      "overEsely": 0.3177082417719367,
+      "underEsely": 0.6822917582280633,
+      "vartGol": 6.433333333333334,
+      "ouLine": 7.5,
+      "ajanlottTipp": "UNDER | conf 50% | edge 5.7% | Win",
+      "h2hMode": false,
+      "h2hTotal": 2,
+      "h2hWinsA": 1,
+      "h2hWinsB": 1,
+      "h2hSource": "msport.com",
+      "oddsSource": "msport.com",
+      "oddsA": 1.57,
+      "oddsB": 2.36,
+      "oddsOver": 2.07,
+      "oddsUnder": 1.6,
+      "category": "NO_BET",
+      "warning": null,
+      "h2hOverRates": {
+        "0.5": 1,
+        "1.5": 1,
+        "2.5": 1,
+        "3.5": 1,
+        "4.5": 1,
+        "5.5": 1,
+        "6.5": 0.5,
+        "7.5": 0.5
+      },
+      "h2hEffectiveSize": 2,
+      "strategy": "A",
+      "lastMatchesA": [
+        {
+          "opponent": "kai",
+          "scoreHome": 2,
+          "scoreAway": 4,
+          "result": "loss",
+          "date": "05/04 12:20"
+        },
+        {
+          "opponent": "george",
+          "scoreHome": 5,
+          "scoreAway": 1,
+          "result": "win",
+          "date": "05/04 12:05"
+        },
+        {
+          "opponent": "iron",
+          "scoreHome": 4,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 11:50"
+        },
+        {
+          "opponent": "vangogh",
+          "scoreHome": 3,
+          "scoreAway": 6,
+          "result": "loss",
+          "date": "05/04 11:35"
+        },
+        {
+          "opponent": "kai",
+          "scoreHome": 4,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 11:05"
+        },
+        {
+          "opponent": "george",
+          "scoreHome": 3,
+          "scoreAway": 3,
+          "result": "draw",
+          "date": "05/04 10:50"
+        },
+        {
+          "opponent": "iron",
+          "scoreHome": 4,
+          "scoreAway": 6,
+          "result": "loss",
+          "date": "05/04 10:35"
+        },
+        {
+          "opponent": "vangogh",
+          "scoreHome": 7,
+          "scoreAway": 5,
+          "result": "win",
+          "date": "05/04 10:20"
+        }
+      ],
+      "lastMatchesB": [
+        {
+          "opponent": "george",
+          "scoreHome": 2,
+          "scoreAway": 6,
+          "result": "loss",
+          "date": "05/04 12:35"
+        },
+        {
+          "opponent": "vangogh",
+          "scoreHome": 1,
+          "scoreAway": 5,
+          "result": "loss",
+          "date": "05/04 12:20"
+        },
+        {
+          "opponent": "kai",
+          "scoreHome": 1,
+          "scoreAway": 2,
+          "result": "loss",
+          "date": "05/04 12:05"
+        },
+        {
+          "opponent": "haidan",
+          "scoreHome": 2,
+          "scoreAway": 4,
+          "result": "loss",
+          "date": "05/04 11:50"
+        },
+        {
+          "opponent": "george",
+          "scoreHome": 2,
+          "scoreAway": 4,
+          "result": "loss",
+          "date": "05/04 11:20"
+        },
+        {
+          "opponent": "vangogh",
+          "scoreHome": 2,
+          "scoreAway": 1,
+          "result": "win",
+          "date": "05/04 11:05"
+        },
+        {
+          "opponent": "kai",
+          "scoreHome": 4,
+          "scoreAway": 3,
+          "result": "win",
+          "date": "05/04 10:50"
+        },
+        {
+          "opponent": "haidan",
+          "scoreHome": 6,
+          "scoreAway": 4,
+          "result": "win",
+          "date": "05/04 10:35"
+        },
+        {
+          "opponent": "george",
+          "scoreHome": 1,
+          "scoreAway": 2,
+          "result": "loss",
+          "date": "05/04 10:05"
+        }
+      ],
+      "gfPerMatchA": 4,
+      "gaPerMatchA": 3.625,
+      "gfPerMatchB": 2.3333333333333335,
+      "gaPerMatchB": 3.4444444444444446,
+      "h2hMatchHistory": [
+        {
+          "date": "05/04 11:50",
+          "goalsA": 4,
+          "goalsB": 2,
+          "winner": "A"
+        },
+        {
+          "date": "05/04 10:35",
+          "goalsA": 4,
+          "goalsB": 6,
+          "winner": "B"
+        }
+      ]
+    },
+    "timestamp": 1777892700000,
+    "date": "2026-05-04",
+    "betType": "Under",
+    "betLine": 7.5,
+    "odds": 1.6,
+    "stake": 1000,
+    "strategy": "A",
+    "result": "Win",
+    "finalScore": "3:0"
+  },
+  {
+    "matchId": "Vendetta-Baba-13:00",
+    "tip": {
+      "time": "13:00",
+      "date": "05/04",
+      "league": "GT Leagues",
+      "playerA": "Vendetta",
+      "teamA": "Aston Villa",
+      "playerB": "Baba",
+      "teamB": "Olympique Lyonnais",
+      "valueBet": "OVER",
+      "confidence": 0.95,
+      "edge": 0.40054945054945057,
+      "stake": 150,
+      "winEselyA": 0.5,
+      "winEselyB": 0.5,
+      "overEsely": 0.95,
+      "underEsely": 0.050000000000000044,
+      "vartGol": 7.5600000000000005,
+      "ouLine": 2.5,
+      "ajanlottTipp": "OVER | conf 95% | edge 40.1% | Over/Under",
+      "h2hMode": false,
+      "h2hTotal": 0,
+      "h2hWinsA": 0,
+      "h2hWinsB": 0,
+      "h2hSource": "esoccerbet",
+      "oddsSource": "msport.com",
+      "oddsA": 1.89,
+      "oddsB": 1.89,
+      "oddsOver": 1.82,
+      "oddsUnder": 1.72,
+      "category": "STRONG_BET",
+      "warning": "Magas edge kis H2H mintán — óvatosan",
+      "h2hEffectiveSize": 0,
+      "strategy": "A",
+      "lastMatchesA": [],
+      "lastMatchesB": [],
+      "gfPerMatchA": 3.5,
+      "gaPerMatchA": 3.5,
+      "gfPerMatchB": 3.5,
+      "gaPerMatchB": 3.5
+    },
+    "timestamp": 1777892400000,
+    "date": "2026-05-04",
+    "betType": "Over",
+    "betLine": 2.5,
+    "odds": 1.82,
+    "stake": 1000,
+    "strategy": "A",
+    "result": "Loss",
+    "finalScore": "2:0"
+  },
+  {
+    "matchId": "Habibi-Jose-13:15",
+    "tip": {
+      "time": "13:15",
+      "date": "05/04",
+      "league": "GT Leagues",
+      "playerA": "Habibi",
+      "teamA": "FC Bayern Munich",
+      "playerB": "Jose",
+      "teamB": "Arsenal FC",
+      "valueBet": "B gyozelem",
+      "confidence": 0.6119768646075976,
+      "edge": 0.30340891911914025,
+      "stake": 150,
+      "winEselyA": 0.6864900707798497,
+      "winEselyB": 0.31350992922015036,
+      "overEsely": 0.5040915231927973,
+      "underEsely": 0.49590847680720274,
+      "vartGol": 4.59,
+      "ouLine": 4.5,
+      "ajanlottTipp": "B gyozelem | conf 61% | edge 30.3% | Over/Under",
+      "h2hMode": false,
+      "h2hTotal": 2,
+      "h2hWinsA": 2,
+      "h2hWinsB": 0,
+      "h2hSource": "msport.com",
+      "oddsSource": "msport.com",
+      "oddsA": 1.01,
+      "oddsB": 99,
+      "oddsOver": 1.55,
+      "oddsUnder": 2.07,
+      "category": "NO_BET",
+      "warning": "Magas edge kis H2H mintán — óvatosan",
+      "h2hOverRates": {
+        "0.5": 1,
+        "1.5": 1,
+        "2.5": 1,
+        "3.5": 1,
+        "4.5": 0.5,
+        "5.5": 0,
+        "6.5": 0,
+        "7.5": 0
+      },
+      "h2hEffectiveSize": 2,
+      "strategy": "A",
+      "lastMatchesA": [
+        {
+          "opponent": "hulk",
+          "scoreHome": 3,
+          "scoreAway": 1,
+          "result": "win",
+          "date": "05/04 12:15"
+        },
+        {
+          "opponent": "jose",
+          "scoreHome": 3,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 12:00"
+        },
+        {
+          "opponent": "leon",
+          "scoreHome": 2,
+          "scoreAway": 2,
+          "result": "draw",
+          "date": "05/04 11:30"
+        },
+        {
+          "opponent": "hulk",
+          "scoreHome": 2,
+          "scoreAway": 4,
+          "result": "loss",
+          "date": "05/04 11:00"
+        },
+        {
+          "opponent": "jose",
+          "scoreHome": 3,
+          "scoreAway": 1,
+          "result": "win",
+          "date": "05/04 10:45"
+        },
+        {
+          "opponent": "leon",
+          "scoreHome": 0,
+          "scoreAway": 2,
+          "result": "loss",
+          "date": "05/04 10:15"
+        }
+      ],
+      "lastMatchesB": [
+        {
+          "opponent": "rossi",
+          "scoreHome": 2,
+          "scoreAway": 2,
+          "result": "draw",
+          "date": "05/04 12:15"
+        },
+        {
+          "opponent": "habibi",
+          "scoreHome": 2,
+          "scoreAway": 3,
+          "result": "loss",
+          "date": "05/04 12:00"
+        },
+        {
+          "opponent": "hulk",
+          "scoreHome": 1,
+          "scoreAway": 3,
+          "result": "loss",
+          "date": "05/04 11:45"
+        },
+        {
+          "opponent": "rossi",
+          "scoreHome": 1,
+          "scoreAway": 1,
+          "result": "draw",
+          "date": "05/04 11:00"
+        },
+        {
+          "opponent": "habibi",
+          "scoreHome": 1,
+          "scoreAway": 3,
+          "result": "loss",
+          "date": "05/04 10:45"
+        },
+        {
+          "opponent": "hulk",
+          "scoreHome": 3,
+          "scoreAway": 4,
+          "result": "loss",
+          "date": "05/04 10:30"
+        }
+      ],
+      "gfPerMatchA": 2.1666666666666665,
+      "gaPerMatchA": 2,
+      "gfPerMatchB": 1.6666666666666667,
+      "gaPerMatchB": 2.6666666666666665,
+      "h2hMatchHistory": [
+        {
+          "date": "05/04 12:00",
+          "goalsA": 3,
+          "goalsB": 2,
+          "winner": "A"
+        },
+        {
+          "date": "05/04 10:45",
+          "goalsA": 3,
+          "goalsB": 1,
+          "winner": "A"
+        }
+      ]
+    },
+    "timestamp": 1777893300000,
+    "date": "2026-05-04",
+    "betType": "Over",
+    "betLine": 4.5,
+    "odds": 1.55,
+    "stake": 1000,
+    "strategy": "A"
+  },
+  {
+    "matchId": "Gabriel-Mateo-13:15",
+    "tip": {
+      "time": "13:15",
+      "date": "05/04",
+      "league": "eAdriatic League",
+      "playerA": "Gabriel",
+      "teamA": "Atletico Madrid",
+      "playerB": "Mateo",
+      "teamB": "Liverpool FC",
+      "valueBet": "OVER",
+      "confidence": 0.5990600950947824,
+      "edge": 0.05609869719415783,
+      "stake": 150,
+      "winEselyA": 0.7732405649363233,
+      "winEselyB": 0.22675943506367666,
+      "overEsely": 0.6443339913118049,
+      "underEsely": 0.3556660086881951,
+      "vartGol": 6.6,
+      "ouLine": 5.5,
+      "ajanlottTipp": "OVER | conf 60% | edge 5.6% | Win",
+      "h2hMode": false,
+      "h2hTotal": 2,
+      "h2hWinsA": 2,
+      "h2hWinsB": 0,
+      "h2hSource": "msport.com",
+      "oddsSource": "msport.com",
+      "oddsA": 1.21,
+      "oddsB": 4.25,
+      "oddsOver": 1.7,
+      "oddsUnder": 1.92,
+      "category": "NO_BET",
+      "warning": null,
+      "h2hOverRates": {
+        "0.5": 1,
+        "1.5": 1,
+        "2.5": 1,
+        "3.5": 1,
+        "4.5": 1,
+        "5.5": 0.5,
+        "6.5": 0.5,
+        "7.5": 0
+      },
+      "h2hEffectiveSize": 2,
+      "strategy": "A",
+      "lastMatchesA": [
+        {
+          "opponent": "donatello",
+          "scoreHome": 6,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 12:30"
+        },
+        {
+          "opponent": "mateo",
+          "scoreHome": 5,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 12:00"
+        },
+        {
+          "opponent": "leonardo",
+          "scoreHome": 6,
+          "scoreAway": 4,
+          "result": "win",
+          "date": "05/04 11:45"
+        },
+        {
+          "opponent": "noah",
+          "scoreHome": 2,
+          "scoreAway": 2,
+          "result": "draw",
+          "date": "05/04 11:30"
+        },
+        {
+          "opponent": "donatello",
+          "scoreHome": 6,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 11:15"
+        },
+        {
+          "opponent": "mateo",
+          "scoreHome": 3,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 10:45"
+        },
+        {
+          "opponent": "leonardo",
+          "scoreHome": 6,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 10:30"
+        },
+        {
+          "opponent": "noah",
+          "scoreHome": 4,
+          "scoreAway": 3,
+          "result": "win",
+          "date": "05/04 10:15"
+        }
+      ],
+      "lastMatchesB": [
+        {
+          "opponent": "leonardo",
+          "scoreHome": 3,
+          "scoreAway": 3,
+          "result": "draw",
+          "date": "05/04 12:30"
+        },
+        {
+          "opponent": "donatello",
+          "scoreHome": 6,
+          "scoreAway": 3,
+          "result": "win",
+          "date": "05/04 12:15"
+        },
+        {
+          "opponent": "gabriel",
+          "scoreHome": 2,
+          "scoreAway": 5,
+          "result": "loss",
+          "date": "05/04 12:00"
+        },
+        {
+          "opponent": "noah",
+          "scoreHome": 3,
+          "scoreAway": 4,
+          "result": "loss",
+          "date": "05/04 11:45"
+        },
+        {
+          "opponent": "leonardo",
+          "scoreHome": 1,
+          "scoreAway": 4,
+          "result": "loss",
+          "date": "05/04 11:15"
+        },
+        {
+          "opponent": "donatello",
+          "scoreHome": 3,
+          "scoreAway": 4,
+          "result": "loss",
+          "date": "05/04 11:00"
+        },
+        {
+          "opponent": "gabriel",
+          "scoreHome": 2,
+          "scoreAway": 3,
+          "result": "loss",
+          "date": "05/04 10:45"
+        },
+        {
+          "opponent": "noah",
+          "scoreHome": 4,
+          "scoreAway": 3,
+          "result": "win",
+          "date": "05/04 10:30"
+        }
+      ],
+      "gfPerMatchA": 4.75,
+      "gaPerMatchA": 2.375,
+      "gfPerMatchB": 3,
+      "gaPerMatchB": 3.625,
+      "h2hMatchHistory": [
+        {
+          "date": "05/04 12:00",
+          "goalsA": 5,
+          "goalsB": 2,
+          "winner": "A"
+        },
+        {
+          "date": "05/04 10:45",
+          "goalsA": 3,
+          "goalsB": 2,
+          "winner": "A"
+        }
+      ]
+    },
+    "timestamp": 1777893300000,
+    "date": "2026-05-04",
+    "betType": "Over",
+    "betLine": 5.5,
+    "odds": 1.7,
+    "stake": 1000,
+    "strategy": "A"
+  },
+  {
+    "matchId": "Leonardo-Gabriel-14:15",
+    "tip": {
+      "time": "14:15",
+      "date": "05/04",
+      "league": "eAdriatic League",
+      "playerA": "Leonardo",
+      "teamA": "Manchester City FC",
+      "playerB": "Gabriel",
+      "teamB": "Atletico Madrid",
+      "valueBet": "PASS",
+      "confidence": 0.5253267309018513,
+      "edge": 0,
+      "stake": 0,
+      "winEselyA": 0.28215443485976294,
+      "winEselyB": 0.7178455651402371,
+      "overEsely": 0.4595917039380107,
+      "underEsely": 0.5404082960619894,
+      "vartGol": 6.3999999999999995,
+      "ouLine": 6.5,
+      "ajanlottTipp": "PASS",
+      "h2hMode": false,
+      "h2hTotal": 3,
+      "h2hWinsA": 0,
+      "h2hWinsB": 3,
+      "h2hSource": "msport.com",
+      "oddsSource": "msport.com",
+      "oddsA": 3.3,
+      "oddsB": 1.32,
+      "oddsOver": 2.02,
+      "oddsUnder": 1.63,
+      "category": "NO_BET",
+      "warning": null,
+      "h2hOverRates": {
+        "0.5": 1,
+        "1.5": 1,
+        "2.5": 1,
+        "3.5": 1,
+        "4.5": 1,
+        "5.5": 1,
+        "6.5": 0.6666666666666667,
+        "7.5": 0.6666666666666667
+      },
+      "h2hEffectiveSize": 3,
+      "strategy": "A",
+      "lastMatchesA": [
+        {
+          "opponent": "mateo",
+          "scoreHome": 2,
+          "scoreAway": 0,
+          "result": "win",
+          "date": "05/04 13:45"
+        },
+        {
+          "opponent": "noah",
+          "scoreHome": 0,
+          "scoreAway": 3,
+          "result": "loss",
+          "date": "05/04 13:30"
+        },
+        {
+          "opponent": "gabriel",
+          "scoreHome": 2,
+          "scoreAway": 4,
+          "result": "loss",
+          "date": "05/04 13:00"
+        },
+        {
+          "opponent": "donatello",
+          "scoreHome": 3,
+          "scoreAway": 5,
+          "result": "loss",
+          "date": "05/04 12:45"
+        },
+        {
+          "opponent": "mateo",
+          "scoreHome": 3,
+          "scoreAway": 3,
+          "result": "draw",
+          "date": "05/04 12:30"
+        },
+        {
+          "opponent": "noah",
+          "scoreHome": 5,
+          "scoreAway": 3,
+          "result": "win",
+          "date": "05/04 12:15"
+        },
+        {
+          "opponent": "gabriel",
+          "scoreHome": 4,
+          "scoreAway": 6,
+          "result": "loss",
+          "date": "05/04 11:45"
+        },
+        {
+          "opponent": "donatello",
+          "scoreHome": 2,
+          "scoreAway": 2,
+          "result": "draw",
+          "date": "05/04 11:30"
+        },
+        {
+          "opponent": "mateo",
+          "scoreHome": 4,
+          "scoreAway": 1,
+          "result": "win",
+          "date": "05/04 11:15"
+        },
+        {
+          "opponent": "noah",
+          "scoreHome": 5,
+          "scoreAway": 1,
+          "result": "win",
+          "date": "05/04 11:00"
+        }
+      ],
+      "lastMatchesB": [
+        {
+          "opponent": "donatello",
+          "scoreHome": 3,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 13:45"
+        },
+        {
+          "opponent": "mateo",
+          "scoreHome": 7,
+          "scoreAway": 4,
+          "result": "win",
+          "date": "05/04 13:15"
+        },
+        {
+          "opponent": "leonardo",
+          "scoreHome": 4,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 13:00"
+        },
+        {
+          "opponent": "noah",
+          "scoreHome": 3,
+          "scoreAway": 4,
+          "result": "loss",
+          "date": "05/04 12:45"
+        },
+        {
+          "opponent": "donatello",
+          "scoreHome": 6,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 12:30"
+        },
+        {
+          "opponent": "mateo",
+          "scoreHome": 5,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 12:00"
+        },
+        {
+          "opponent": "leonardo",
+          "scoreHome": 6,
+          "scoreAway": 4,
+          "result": "win",
+          "date": "05/04 11:45"
+        },
+        {
+          "opponent": "noah",
+          "scoreHome": 2,
+          "scoreAway": 2,
+          "result": "draw",
+          "date": "05/04 11:30"
+        },
+        {
+          "opponent": "donatello",
+          "scoreHome": 6,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 11:15"
+        },
+        {
+          "opponent": "mateo",
+          "scoreHome": 3,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 10:45"
+        }
+      ],
+      "gfPerMatchA": 2.9166666666666665,
+      "gaPerMatchA": 3.25,
+      "gfPerMatchB": 4.583333333333333,
+      "gaPerMatchB": 2.5833333333333335,
+      "h2hMatchHistory": [
+        {
+          "date": "05/04 13:00",
+          "goalsA": 2,
+          "goalsB": 4,
+          "winner": "B"
+        },
+        {
+          "date": "05/04 11:45",
+          "goalsA": 4,
+          "goalsB": 6,
+          "winner": "B"
+        },
+        {
+          "date": "05/04 10:30",
+          "goalsA": 2,
+          "goalsB": 6,
+          "winner": "B"
+        }
+      ]
+    },
+    "timestamp": 1777896900000,
+    "date": "2026-05-04",
+    "betType": "Under",
+    "betLine": 6.5,
+    "odds": 1.63,
+    "stake": 1000,
+    "strategy": "A"
+  },
+  {
+    "matchId": "Mateo-Noah-14:15",
+    "tip": {
+      "time": "14:15",
+      "date": "05/04",
+      "league": "eAdriatic League",
+      "playerA": "Mateo",
+      "teamA": "Liverpool FC",
+      "playerB": "Noah",
+      "teamB": "Paris Saint-Germain",
+      "valueBet": "PASS",
+      "confidence": 0.5196101805757746,
+      "edge": 0,
+      "stake": 0,
+      "winEselyA": 0.47078965427937863,
+      "winEselyB": 0.5292103457206213,
+      "overEsely": 0.47192995988188735,
+      "underEsely": 0.5280700401181126,
+      "vartGol": 6.48,
+      "ouLine": 6.5,
+      "ajanlottTipp": "PASS",
+      "h2hMode": false,
+      "h2hTotal": 3,
+      "h2hWinsA": 2,
+      "h2hWinsB": 1,
+      "h2hSource": "msport.com",
+      "oddsSource": "msport.com",
+      "oddsA": 2.2,
+      "oddsB": 1.65,
+      "oddsOver": 1.81,
+      "oddsUnder": 1.79,
+      "category": "NO_BET",
+      "warning": null,
+      "h2hOverRates": {
+        "0.5": 1,
+        "1.5": 1,
+        "2.5": 1,
+        "3.5": 1,
+        "4.5": 1,
+        "5.5": 1,
+        "6.5": 1,
+        "7.5": 0.33333333333333337
+      },
+      "h2hEffectiveSize": 3,
+      "strategy": "A",
+      "lastMatchesA": [
+        {
+          "opponent": "leonardo",
+          "scoreHome": 0,
+          "scoreAway": 2,
+          "result": "loss",
+          "date": "05/04 13:45"
+        },
+        {
+          "opponent": "donatello",
+          "scoreHome": 4,
+          "scoreAway": 6,
+          "result": "loss",
+          "date": "05/04 13:30"
+        },
+        {
+          "opponent": "gabriel",
+          "scoreHome": 4,
+          "scoreAway": 7,
+          "result": "loss",
+          "date": "05/04 13:15"
+        },
+        {
+          "opponent": "noah",
+          "scoreHome": 5,
+          "scoreAway": 4,
+          "result": "win",
+          "date": "05/04 13:00"
+        },
+        {
+          "opponent": "leonardo",
+          "scoreHome": 3,
+          "scoreAway": 3,
+          "result": "draw",
+          "date": "05/04 12:30"
+        },
+        {
+          "opponent": "donatello",
+          "scoreHome": 6,
+          "scoreAway": 3,
+          "result": "win",
+          "date": "05/04 12:15"
+        },
+        {
+          "opponent": "gabriel",
+          "scoreHome": 2,
+          "scoreAway": 5,
+          "result": "loss",
+          "date": "05/04 12:00"
+        },
+        {
+          "opponent": "noah",
+          "scoreHome": 3,
+          "scoreAway": 4,
+          "result": "loss",
+          "date": "05/04 11:45"
+        },
+        {
+          "opponent": "leonardo",
+          "scoreHome": 1,
+          "scoreAway": 4,
+          "result": "loss",
+          "date": "05/04 11:15"
+        },
+        {
+          "opponent": "donatello",
+          "scoreHome": 3,
+          "scoreAway": 4,
+          "result": "loss",
+          "date": "05/04 11:00"
+        }
+      ],
+      "lastMatchesB": [
+        {
+          "opponent": "leonardo",
+          "scoreHome": 3,
+          "scoreAway": 0,
+          "result": "win",
+          "date": "05/04 13:30"
+        },
+        {
+          "opponent": "donatello",
+          "scoreHome": 3,
+          "scoreAway": 4,
+          "result": "loss",
+          "date": "05/04 13:15"
+        },
+        {
+          "opponent": "mateo",
+          "scoreHome": 4,
+          "scoreAway": 5,
+          "result": "loss",
+          "date": "05/04 13:00"
+        },
+        {
+          "opponent": "gabriel",
+          "scoreHome": 4,
+          "scoreAway": 3,
+          "result": "win",
+          "date": "05/04 12:45"
+        },
+        {
+          "opponent": "leonardo",
+          "scoreHome": 3,
+          "scoreAway": 5,
+          "result": "loss",
+          "date": "05/04 12:15"
+        },
+        {
+          "opponent": "donatello",
+          "scoreHome": 4,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 12:00"
+        },
+        {
+          "opponent": "mateo",
+          "scoreHome": 4,
+          "scoreAway": 3,
+          "result": "win",
+          "date": "05/04 11:45"
+        },
+        {
+          "opponent": "gabriel",
+          "scoreHome": 2,
+          "scoreAway": 2,
+          "result": "draw",
+          "date": "05/04 11:30"
+        },
+        {
+          "opponent": "leonardo",
+          "scoreHome": 1,
+          "scoreAway": 5,
+          "result": "loss",
+          "date": "05/04 11:00"
+        },
+        {
+          "opponent": "donatello",
+          "scoreHome": 2,
+          "scoreAway": 4,
+          "result": "loss",
+          "date": "05/04 10:45"
+        }
+      ],
+      "gfPerMatchA": 3.0833333333333335,
+      "gaPerMatchA": 4,
+      "gfPerMatchB": 3,
+      "gaPerMatchB": 3.4166666666666665,
+      "h2hMatchHistory": [
+        {
+          "date": "05/04 13:00",
+          "goalsA": 5,
+          "goalsB": 4,
+          "winner": "A"
+        },
+        {
+          "date": "05/04 11:45",
+          "goalsA": 3,
+          "goalsB": 4,
+          "winner": "B"
+        },
+        {
+          "date": "05/04 10:30",
+          "goalsA": 4,
+          "goalsB": 3,
+          "winner": "A"
+        }
+      ]
+    },
+    "timestamp": 1777896900000,
+    "date": "2026-05-04",
+    "betType": "Under",
+    "betLine": 6.5,
+    "odds": 1.79,
+    "stake": 1000,
+    "strategy": "A"
+  },
+  {
+    "matchId": "Vendetta-Fred-15:00",
+    "tip": {
+      "time": "15:00",
+      "date": "05/04",
+      "league": "GT Leagues",
+      "playerA": "Vendetta",
+      "teamA": "Aston Villa",
+      "playerB": "Fred",
+      "teamB": "PAOK",
+      "valueBet": "OVER",
+      "confidence": 0.95,
+      "edge": 0.3130573248407643,
+      "stake": 150,
+      "winEselyA": 0.5227745519712546,
+      "winEselyB": 0.47722544802874556,
+      "overEsely": 0.95,
+      "underEsely": 0.050000000000000044,
+      "vartGol": 7.5600000000000005,
+      "ouLine": 2.5,
+      "ajanlottTipp": "OVER | conf 95% | edge 31.3% | Over/Under",
+      "h2hMode": false,
+      "h2hTotal": 1,
+      "h2hWinsA": 1,
+      "h2hWinsB": 0,
+      "h2hSource": "msport.com",
+      "oddsSource": "msport.com",
+      "oddsA": 1.89,
+      "oddsB": 1.89,
+      "oddsOver": 1.57,
+      "oddsUnder": 2.03,
+      "category": "STRONG_BET",
+      "warning": "Magas edge kis H2H mintán — óvatosan",
+      "h2hOverRates": {
+        "0.5": 1,
+        "1.5": 0,
+        "2.5": 0,
+        "3.5": 0,
+        "4.5": 0,
+        "5.5": 0,
+        "6.5": 0,
+        "7.5": 0
+      },
+      "h2hEffectiveSize": 1,
+      "strategy": "A",
+      "lastMatchesA": [],
+      "lastMatchesB": [],
+      "gfPerMatchA": 3.5,
+      "gaPerMatchA": 3.5,
+      "gfPerMatchB": 3.5,
+      "gaPerMatchB": 3.5,
+      "h2hMatchHistory": [
+        {
+          "date": "05/04 13:45",
+          "goalsA": 1,
+          "goalsB": 0,
+          "winner": "A"
+        }
+      ]
+    },
+    "timestamp": 1777899600000,
+    "date": "2026-05-04",
+    "betType": "Over",
+    "betLine": 2.5,
+    "odds": 1.57,
+    "stake": 2000,
+    "strategy": "A",
+    "result": "Win",
+    "finalScore": "3:0"
+  },
+  {
+    "matchId": "Sensei-Hussein-15:00",
+    "tip": {
+      "time": "15:00",
+      "date": "05/04",
+      "league": "GT Leagues",
+      "playerA": "Sensei",
+      "teamA": "Real Betis",
+      "playerB": "Hussein",
+      "teamB": "AS Roma",
+      "valueBet": "OVER",
+      "confidence": 0.95,
+      "edge": 0.49128440366972476,
+      "stake": 150,
+      "winEselyA": 0.5227745519712546,
+      "winEselyB": 0.47722544802874556,
+      "overEsely": 0.95,
+      "underEsely": 0.050000000000000044,
+      "vartGol": 7.5600000000000005,
+      "ouLine": 2.5,
+      "ajanlottTipp": "OVER | conf 95% | edge 49.1% | Over/Under",
+      "h2hMode": false,
+      "h2hTotal": 1,
+      "h2hWinsA": 1,
+      "h2hWinsB": 0,
+      "h2hSource": "msport.com",
+      "oddsSource": "msport.com",
+      "oddsA": 1.89,
+      "oddsB": 1.89,
+      "oddsOver": 2.18,
+      "oddsUnder": 1.49,
+      "category": "STRONG_BET",
+      "warning": "Magas edge kis H2H mintán — óvatosan",
+      "h2hOverRates": {
+        "0.5": 1,
+        "1.5": 1,
+        "2.5": 0,
+        "3.5": 0,
+        "4.5": 0,
+        "5.5": 0,
+        "6.5": 0,
+        "7.5": 0
+      },
+      "h2hEffectiveSize": 1,
+      "strategy": "A",
+      "lastMatchesA": [],
+      "lastMatchesB": [],
+      "gfPerMatchA": 3.5,
+      "gaPerMatchA": 3.5,
+      "gfPerMatchB": 3.5,
+      "gaPerMatchB": 3.5,
+      "h2hMatchHistory": [
+        {
+          "date": "05/04 13:45",
+          "goalsA": 2,
+          "goalsB": 0,
+          "winner": "A"
+        }
+      ]
+    },
+    "timestamp": 1777899600000,
+    "date": "2026-05-04",
+    "betType": "Over",
+    "betLine": 2.5,
+    "odds": 2.18,
+    "stake": 2000,
+    "strategy": "A",
+    "result": "Loss",
+    "finalScore": "0:0"
+  },
+  {
+    "matchId": "Oliver-Alexis-15:00",
+    "tip": {
+      "time": "15:00",
+      "date": "05/04",
+      "league": "eAdriatic League",
+      "playerA": "Oliver",
+      "teamA": "Manchester City FC",
+      "playerB": "Alexis",
+      "teamB": "FC Barcelona",
+      "valueBet": "B gyozelem",
+      "confidence": 0.7865641534391534,
+      "edge": 0.09226190476190477,
+      "stake": 150,
+      "winEselyA": 0.3125,
+      "winEselyB": 0.6875,
+      "overEsely": 0.3571428571428571,
+      "underEsely": 0.6428571428571429,
+      "vartGol": 6.333333333333332,
+      "ouLine": 7.5,
+      "ajanlottTipp": "B gyozelem | conf 79% | edge 9.2% | Win",
+      "h2hMode": true,
+      "h2hTotal": 6,
+      "h2hWinsA": 1,
+      "h2hWinsB": 4,
+      "h2hSource": "msport.com",
+      "oddsSource": "msport.com",
+      "oddsA": 2.15,
+      "oddsB": 1.68,
+      "oddsOver": 1.72,
+      "oddsUnder": 1.89,
+      "category": "BET",
+      "warning": null,
+      "h2hOverRates": {
+        "0.5": 1,
+        "1.5": 1,
+        "2.5": 1,
+        "3.5": 1,
+        "4.5": 0.8333333333333333,
+        "5.5": 0.6666666666666665,
+        "6.5": 0.4999999999999999,
+        "7.5": 0.33333333333333326
+      },
+      "h2hEffectiveSize": 5.2,
+      "strategy": "A",
+      "lastMatchesA": [],
+      "lastMatchesB": [
+        {
+          "opponent": "eduardo",
+          "scoreHome": 2,
+          "scoreAway": 4,
+          "result": "loss",
+          "date": "05/04 06:30"
+        },
+        {
+          "opponent": "odin",
+          "scoreHome": 3,
+          "scoreAway": 1,
+          "result": "win",
+          "date": "05/04 06:00"
+        },
+        {
+          "opponent": "dexter",
+          "scoreHome": 2,
+          "scoreAway": 2,
+          "result": "draw",
+          "date": "05/04 05:45"
+        },
+        {
+          "opponent": "gael",
+          "scoreHome": 3,
+          "scoreAway": 3,
+          "result": "draw",
+          "date": "05/04 05:30"
+        },
+        {
+          "opponent": "eduardo",
+          "scoreHome": 3,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 05:15"
+        },
+        {
+          "opponent": "odin",
+          "scoreHome": 5,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 04:45"
+        },
+        {
+          "opponent": "dexter",
+          "scoreHome": 4,
+          "scoreAway": 0,
+          "result": "win",
+          "date": "05/04 04:30"
+        },
+        {
+          "opponent": "gael",
+          "scoreHome": 6,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/04 04:15"
+        },
+        {
+          "opponent": "eduardo",
+          "scoreHome": 4,
+          "scoreAway": 1,
+          "result": "win",
+          "date": "05/04 04:00"
+        },
+        {
+          "opponent": "odin",
+          "scoreHome": 2,
+          "scoreAway": 3,
+          "result": "loss",
+          "date": "05/04 03:30"
+        }
+      ],
+      "gfPerMatchA": 3.5,
+      "gaPerMatchA": 3.5,
+      "gfPerMatchB": 3.84,
+      "gaPerMatchB": 2.26,
+      "h2hMatchHistory": [
+        {
+          "date": "04/28 14:20",
+          "goalsA": 2,
+          "goalsB": 5,
+          "winner": "B"
+        },
+        {
+          "date": "04/28 13:05",
+          "goalsA": 2,
+          "goalsB": 6,
+          "winner": "B"
+        },
+        {
+          "date": "04/28 11:50",
+          "goalsA": 1,
+          "goalsB": 7,
+          "winner": "B"
+        },
+        {
+          "date": "04/28 10:35",
+          "goalsA": 4,
+          "goalsB": 1,
+          "winner": "A"
+        },
+        {
+          "date": "04/28 09:05",
+          "goalsA": 1,
+          "goalsB": 3,
+          "winner": "B"
+        },
+        {
+          "date": "04/28 07:50",
+          "goalsA": 1,
+          "goalsB": 5,
+          "winner": "B"
+        }
+      ]
+    },
+    "timestamp": 1777899600000,
+    "date": "2026-05-04",
+    "betType": "Under",
+    "betLine": 7.5,
+    "odds": 1.89,
+    "stake": 2000,
+    "strategy": "A",
+    "result": "Win",
+    "finalScore": "5:2"
+  },
+  {
+    "matchId": "Matrix-Maverick-15:00",
+    "tip": {
+      "time": "15:00",
+      "date": "05/04",
+      "league": "eAdriatic League",
+      "playerA": "Matrix",
+      "teamA": "Paris Saint-Germain",
+      "playerB": "Maverick",
+      "teamB": "Real Madrid",
+      "valueBet": "PASS",
+      "confidence": 0.44946143569113234,
+      "edge": 0,
+      "stake": 0,
+      "winEselyA": 0.5021794235378362,
+      "winEselyB": 0.4978205764621638,
+      "overEsely": 0.4346051223348014,
+      "underEsely": 0.5653948776651986,
+      "vartGol": 7.2288,
+      "ouLine": 7.5,
+      "ajanlottTipp": "PASS",
+      "h2hMode": false,
+      "h2hTotal": 0,
+      "h2hWinsA": 0,
+      "h2hWinsB": 0,
+      "h2hSource": "esoccerbet",
+      "oddsSource": "msport.com",
+      "oddsA": 1.85,
+      "oddsB": 1.93,
+      "oddsOver": 1.7,
+      "oddsUnder": 1.92,
+      "category": "NO_BET",
+      "warning": null,
+      "h2hEffectiveSize": 0,
+      "strategy": "A",
+      "lastMatchesA": [],
+      "lastMatchesB": [
+        {
+          "opponent": "liam",
+          "scoreHome": 4,
+          "scoreAway": 6,
+          "result": "loss",
+          "date": "05/03 22:30"
+        },
+        {
+          "opponent": "misterx",
+          "scoreHome": 6,
+          "scoreAway": 1,
+          "result": "win",
+          "date": "05/03 22:15"
+        },
+        {
+          "opponent": "donatello",
+          "scoreHome": 2,
+          "scoreAway": 5,
+          "result": "loss",
+          "date": "05/03 22:00"
+        },
+        {
+          "opponent": "noah",
+          "scoreHome": 4,
+          "scoreAway": 5,
+          "result": "loss",
+          "date": "05/03 21:45"
+        },
+        {
+          "opponent": "liam",
+          "scoreHome": 4,
+          "scoreAway": 8,
+          "result": "loss",
+          "date": "05/03 21:15"
+        },
+        {
+          "opponent": "misterx",
+          "scoreHome": 6,
+          "scoreAway": 5,
+          "result": "win",
+          "date": "05/03 21:00"
+        },
+        {
+          "opponent": "donatello",
+          "scoreHome": 7,
+          "scoreAway": 8,
+          "result": "loss",
+          "date": "05/03 20:45"
+        },
+        {
+          "opponent": "noah",
+          "scoreHome": 4,
+          "scoreAway": 6,
+          "result": "loss",
+          "date": "05/03 20:30"
+        },
+        {
+          "opponent": "liam",
+          "scoreHome": 6,
+          "scoreAway": 7,
+          "result": "loss",
+          "date": "05/03 20:00"
+        },
+        {
+          "opponent": "misterx",
+          "scoreHome": 3,
+          "scoreAway": 2,
+          "result": "win",
+          "date": "05/03 19:45"
+        }
+      ],
+      "gfPerMatchA": 3.5,
+      "gaPerMatchA": 3.5,
+      "gfPerMatchB": 4.32,
+      "gaPerMatchB": 3.74
+    },
+    "timestamp": 1777899600000,
+    "date": "2026-05-04",
+    "betType": "Under",
+    "betLine": 7.5,
+    "odds": 1.92,
+    "stake": 2000,
+    "strategy": "A",
+    "result": "Loss",
+    "finalScore": "5:4"
+  },
+  {
+    "matchId": "Bruno-Chad-19:15",
+    "tip": {
+      "time": "19:15",
+      "date": "05/04",
+      "league": "GT Leagues",
+      "playerA": "Bruno",
+      "teamA": "Borussia Dortmund",
+      "playerB": "Chad",
+      "teamB": "VfB Stuttgart",
+      "valueBet": "OVER",
+      "confidence": 0.95,
+      "edge": 0.2633300303026175,
+      "stake": 150,
+      "winEselyA": 0.5,
+      "winEselyB": 0.5,
+      "overEsely": 0.8962414227076807,
+      "underEsely": 0.1037585772923193,
+      "vartGol": 7.5600000000000005,
+      "ouLine": 4.5,
+      "ajanlottTipp": "OVER | conf 95% | edge 26.3% | Over/Under",
+      "h2hMode": false,
+      "h2hTotal": 0,
+      "h2hWinsA": 0,
+      "h2hWinsB": 0,
+      "h2hSource": "esoccerbet",
+      "oddsSource": "msport.com",
+      "oddsA": 1.89,
+      "oddsB": 1.89,
+      "oddsOver": 1.58,
+      "oddsUnder": 2.02,
+      "category": "STRONG_BET",
+      "warning": null,
+      "h2hEffectiveSize": 0,
+      "strategy": "A",
+      "lastMatchesA": [],
+      "lastMatchesB": [],
+      "gfPerMatchA": 3.5,
+      "gaPerMatchA": 3.5,
+      "gfPerMatchB": 3.5,
+      "gaPerMatchB": 3.5
+    },
+    "timestamp": 1777914900000,
+    "date": "2026-05-04",
+    "betType": "Over",
+    "betLine": 4.5,
+    "odds": 1.58,
+    "stake": 1000,
+    "strategy": "A",
+    "result": "Loss",
+    "finalScore": "2:1"
+  },
+  {
+    "matchId": "Hussein-Vendetta-19:15",
+    "tip": {
+      "time": "19:15",
+      "date": "05/04",
+      "league": "GT Leagues",
+      "playerA": "Hussein",
+      "teamA": "Rayo Vallecano",
+      "playerB": "Vendetta",
+      "teamB": "Shakhtar Donetsk",
+      "valueBet": "OVER",
+      "confidence": 0.95,
+      "edge": 0.3944444444444444,
+      "stake": 150,
+      "winEselyA": 0.5,
+      "winEselyB": 0.5,
+      "overEsely": 0.95,
+      "underEsely": 0.050000000000000044,
+      "vartGol": 7.5600000000000005,
+      "ouLine": 2.5,
+      "ajanlottTipp": "OVER | conf 95% | edge 39.4% | Over/Under",
+      "h2hMode": false,
+      "h2hTotal": 0,
+      "h2hWinsA": 0,
+      "h2hWinsB": 0,
+      "h2hSource": "esoccerbet",
+      "oddsSource": "msport.com",
+      "oddsA": 1.89,
+      "oddsB": 1.89,
+      "oddsOver": 1.8,
+      "oddsUnder": 1.74,
+      "category": "STRONG_BET",
+      "warning": "Magas edge kis H2H mintán — óvatosan",
+      "h2hEffectiveSize": 0,
+      "strategy": "A",
+      "lastMatchesA": [],
+      "lastMatchesB": [],
+      "gfPerMatchA": 3.5,
+      "gaPerMatchA": 3.5,
+      "gfPerMatchB": 3.5,
+      "gaPerMatchB": 3.5
+    },
+    "timestamp": 1777914900000,
+    "date": "2026-05-04",
+    "betType": "Over",
+    "betLine": 2.5,
+    "odds": 1.8,
+    "stake": 1000,
+    "strategy": "A",
+    "result": "Loss",
+    "finalScore": "1:1"
+  },
+  {
+    "matchId": "Alexis-Panther-19:15",
+    "tip": {
+      "time": "19:15",
+      "date": "05/04",
+      "league": "eAdriatic League",
+      "playerA": "Alexis",
+      "teamA": "Newcastle United",
+      "playerB": "Panther",
+      "teamB": "Aston Villa",
+      "valueBet": "PASS",
+      "confidence": 0.4191264922113166,
+      "edge": 0,
+      "stake": 0,
+      "winEselyA": 0.5,
+      "winEselyB": 0.5000000000000001,
+      "overEsely": 0.5085646264876801,
+      "underEsely": 0.4914353735123199,
+      "vartGol": 6.72,
+      "ouLine": 6.5,
+      "ajanlottTipp": "PASS",
+      "h2hMode": false,
+      "h2hTotal": 0,
+      "h2hWinsA": 0,
+      "h2hWinsB": 0,
+      "h2hSource": "esoccerbet",
+      "oddsSource": "msport.com",
+      "oddsA": 1.89,
+      "oddsB": 1.89,
+      "oddsOver": 1.97,
+      "oddsUnder": 1.66,
+      "category": "NO_BET",
+      "warning": null,
+      "h2hEffectiveSize": 0,
+      "strategy": "A",
+      "lastMatchesA": [],
+      "lastMatchesB": [],
+      "gfPerMatchA": 3.5,
+      "gaPerMatchA": 3.5,
+      "gfPerMatchB": 3.5,
+      "gaPerMatchB": 3.5
+    },
+    "timestamp": 1777914900000,
+    "date": "2026-05-04",
+    "betType": "Over",
+    "betLine": 6.5,
+    "odds": 1.97,
+    "stake": 1000,
+    "strategy": "A",
+    "result": "Loss",
+    "finalScore": "0:2"
+  },
+  {
+    "matchId": "Matrix-Oliver-19:15",
+    "tip": {
+      "time": "19:15",
+      "date": "05/04",
+      "league": "eAdriatic League",
+      "playerA": "Matrix",
+      "teamA": "Chelsea FC",
+      "playerB": "Oliver",
+      "teamB": "Tottenham Hotspur FC",
+      "valueBet": "UNDER",
+      "confidence": 0.4400578747342987,
+      "edge": 0.08467594338163897,
+      "stake": 150,
+      "winEselyA": 0.5,
+      "winEselyB": 0.5000000000000001,
+      "overEsely": 0.35976850106280545,
+      "underEsely": 0.6402314989371946,
+      "vartGol": 6.72,
+      "ouLine": 7.5,
+      "ajanlottTipp": "UNDER | conf 44% | edge 8.5% | Win",
+      "h2hMode": false,
+      "h2hTotal": 0,
+      "h2hWinsA": 0,
+      "h2hWinsB": 0,
+      "h2hSource": "esoccerbet",
+      "oddsSource": "msport.com",
+      "oddsA": 1.89,
+      "oddsB": 1.89,
+      "oddsOver": 1.8,
+      "oddsUnder": 1.8,
+      "category": "NO_BET",
+      "warning": null,
+      "h2hEffectiveSize": 0,
+      "strategy": "A",
+      "lastMatchesA": [],
+      "lastMatchesB": [],
+      "gfPerMatchA": 3.5,
+      "gaPerMatchA": 3.5,
+      "gfPerMatchB": 3.5,
+      "gaPerMatchB": 3.5
+    },
+    "timestamp": 1777914900000,
+    "date": "2026-05-04",
+    "betType": "Under",
+    "betLine": 7.5,
+    "odds": 1.8,
+    "stake": 1000,
+    "strategy": "A",
+    "result": "Win",
+    "finalScore": "1:5"
   }
 ]

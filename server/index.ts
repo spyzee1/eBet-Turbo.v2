@@ -1,3 +1,23 @@
+// ── .env betöltés (dotenv nélkül) ────────────────────────────────────────────
+// Beolvassa a projekt gyökerében lévő .env fájlt és betölti a process.env-be.
+// Production (Render): ott a Dashboard env vars-ból töltődnek, ez ott nem fut.
+import { readFileSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+try {
+  const __d = dirname(fileURLToPath(import.meta.url));
+  const envPath = resolve(__d, '../.env');
+  const lines = readFileSync(envPath, 'utf-8').split('\n');
+  for (const line of lines) {
+    const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+    if (m && !process.env[m[1]]) {
+      process.env[m[1]] = m[2].trim();
+    }
+  }
+  console.log('[env] .env betöltve ✅');
+} catch { /* .env nem található — production-ban OK */ }
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { getVegasOdds, getAllVegasOdds, clearVegasCache, getAllLiveScores, getRawLiveDebug } from './vegas-scraper.js';
 import {
   scrapeFullPlayerData,
@@ -19,7 +39,7 @@ import { analyzeTimePerformance, getTimeSummary } from '../src/model/timeFactors
 import {
   scrapeTCLeague, scrapeTCMatchOdds, scrapeTCH2H, aggregateH2H,
   aggregateH2HWeighted, normalizeTCH2H, mergeH2HSources,
-  TC_LEAGUES, NormalizedH2H,
+  TC_LEAGUES, NormalizedH2H, TCFixture,
 } from './totalcorner.js';
 import {
   configureTelegram, isTelegramConfigured, loadConfigFromEnv,
@@ -31,7 +51,23 @@ import {
 import {
   configureTrendScanner, startTrendScanner, getTrendScannerState, runTrendScanOnce,
 } from './trend-scanner.js';
-import { getMsportOdds, getMsportOddsForMatch, getMsportSchedule, getMsportRawDebug, setMsportCookie, getMsportCookieStatus, getMsportLiveScores } from './msport-scraper.js';
+import {
+  getMsportOdds, getMsportOddsForMatch, getMsportSchedule, getMsportRawDebug,
+  setMsportCookie, getMsportCookieStatus, getMsportLiveScores,
+  getMsportMatchResults, getMsportPlayerLastMatches, getMsportH2H,
+  injectCompletedMatches, clearOldInjectedMatches, MsportMatchResult,
+  scrapeMsportFixtures, clearFixtureCache, getMsportUpcomingSchedule,
+} from './msport-scraper.js';
+import {
+  getCloudbetOdds, getCloudbetOddsForMatch, getCloudbetSchedule,
+  clearCloudbetCache, getCloudbetKeyStatus, testCloudbetApi,
+  listCloudbetCompetitions, discoverCloudbetCompetitions,
+} from './cloudbet-scraper.js';
+import {
+  getCloudbetWebSchedule, getCloudbetWebLiveScores, getCloudbetWebResults,
+  getCloudbetWebH2H, getCloudbetWebAllEvents, getCloudbetWebH2HStats,
+  clearCloudbetWebCache,
+} from './cloudbet-web-scraper.js';
 
 const app = express();
 app.use(cors());
@@ -112,29 +148,165 @@ function updateDailyAccum(odds: import('./msport-scraper.js').MsportOdds[]): voi
   }
 }
 
+/**
+ * TC-ből érkező GT Leagues fixture konvertálása ScheduleEntry formátumba.
+ * startTime: "05/05 17:59" (UTC) → date="05/05", time="19:59" (CEST +2h)
+ */
+function tcFixtureToEntry(f: TCFixture, league: string) {
+  if (!f.playerHome || !f.playerAway || !f.startTime) return null;
+  // Már lezárt meccsek kiszűrése (van score)
+  if (f.score && /\d\s*-\s*\d/.test(f.score)) return null;
+
+  const parts = f.startTime.trim().split(' ');
+  if (parts.length < 2) return null;
+  const date = parts[0]; // "05/05"
+  const timeUTC = parts[1]; // "17:59"
+
+  const [h, m] = timeUTC.split(':').map(Number);
+  const newH = (h + 2) % 24; // UTC → Budapest CEST (+2h)
+  const time = `${String(newH).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+  // Közelítő startTime ms (idei év alapján)
+  const now = new Date();
+  const [mo, day] = date.split('/').map(Number);
+  const startTime = Date.UTC(now.getFullYear(), mo - 1, day, h, m, 0);
+
+  return {
+    playerHome: f.playerHome,
+    playerAway: f.playerAway,
+    teamHome: f.teamHome,
+    teamAway: f.teamAway,
+    league,
+    time,
+    date,
+    startTime,
+    eventId: f.matchId,
+  };
+}
+
+/**
+ * Cloudbet belső API event → schedule entry konverzió.
+ * A csapatnév formátuma: "Real Betis (Tifosi)" → teamHome="Real Betis", playerHome="Tifosi"
+ */
+function cbWebEventToEntry(ev: import('./cloudbet-web-scraper.js').CbWebEvent) {
+  const parseTeam = (name: string): { team: string; player: string } => {
+    const m = name.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+    if (m) return { team: m[1].trim(), player: m[2].trim() };
+    return { team: name.trim(), player: '' };
+  };
+
+  const home = parseTeam(ev.homeTeam);
+  const away = parseTeam(ev.awayTeam);
+  if (!home.player || !away.player) return null;  // player név kell
+
+  // startTime UTC ISO → Budapest CEST (UTC+2) → "HH:MM" és "MM/DD"
+  const utcMs  = new Date(ev.startTime).getTime();
+  const cestMs = utcMs + 2 * 3600 * 1000;
+  const d      = new Date(cestMs);
+  const time   = `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+  const date   = `${String(d.getUTCMonth() + 1).padStart(2, '0')}/${String(d.getUTCDate()).padStart(2, '0')}`;
+
+  return {
+    playerHome: home.player,
+    playerAway: away.player,
+    teamHome:   home.team,
+    teamAway:   away.team,
+    league:     ev.league,
+    time,
+    date,
+    startTime:  utcMs,
+    eventId:    String(ev.id),
+  };
+}
+
 /** Combined schedule: esoccerbet.org + TotalCorner-only leagues (upcoming only) */
 async function getCombinedSchedule() {
-  const [esbResult, h2hResult, voltaResult, msportResult] = await Promise.allSettled([
+  const [esbResult, h2hResult, voltaResult, msportResult, cloudbetResult, gtTcResult, cbWebResult] = await Promise.allSettled([
     esbScrapeSchedule(),
     tcScrapeSchedule('Esoccer H2H GG League'),
     tcScrapeSchedule('Esports Volta'),
-    getMsportSchedule(),   // GT Leagues + eAdriatic League — csak msport comingSoons ablakban lévő meccsek
+    // msport: GT Leagues + eAdriatic (ha nincs rate-limit)
+    getMsportUpcomingSchedule(),
+    // Cloudbet API: eAdriatic League primary forrás (API key alapján)
+    getCloudbetKeyStatus().configured ? getCloudbetSchedule() : Promise.resolve([]),
+    // TotalCorner: GT Leagues upcoming fixtures (msport fallback)
+    scrapeTCLeague('GT Leagues'),
+    // Cloudbet belső Web API: mindkét liga, kulcs nélkül (GT + eAdriatic fallback)
+    getCloudbetWebSchedule(),
   ]);
-  // GT Leagues és eAdriatic KIZÁRÓLAG az msport-ból jön (csak valódi odds-os meccsek)
-  // → esb-ből ezeket kiszűrjük, hogy ne jelenjenek meg n/a odds-szal
-  const esbAll    = esbResult.status     === 'fulfilled' ? esbResult.value     : [];
-  const esb       = esbAll.filter(e => e.league !== 'GT Leagues' && e.league !== 'eAdriatic League');
-  const h2hRaw    = h2hResult.status     === 'fulfilled' ? h2hResult.value     : [];
-  const voltaRaw  = voltaResult.status   === 'fulfilled' ? voltaResult.value   : [];
-  const msportRaw = msportResult.status  === 'fulfilled' ? msportResult.value  : [];
 
-  // Napi accumulator frissítése (cached getMsportOdds, nem extra API hívás)
+  // eAdriatic: Cloudbet kezeli → esb-ből kiszűrjük (Cloudbet az elsődleges)
+  // GT Leagues: esb-ből ENGEDJÜK át (fallback ha msport rate-limited)
+  const esbAll       = esbResult.status       === 'fulfilled' ? esbResult.value       : [];
+  const esb          = esbAll.filter(e => e.league !== 'eAdriatic League');
+  const h2hRaw       = h2hResult.status       === 'fulfilled' ? h2hResult.value       : [];
+  const voltaRaw     = voltaResult.status     === 'fulfilled' ? voltaResult.value     : [];
+  const msportRaw    = msportResult.status    === 'fulfilled' ? msportResult.value    : [];
+  const cloudbetRaw  = cloudbetResult.status  === 'fulfilled' ? cloudbetResult.value  : [];
+  const gtTcData     = gtTcResult.status      === 'fulfilled' ? gtTcResult.value      : null;
+  const cbWebRaw     = cbWebResult.status     === 'fulfilled' ? cbWebResult.value     : [];
+
+  // GT Leagues: TC fixtures → schedule formátum, csak közelgő meccsek
+  const gtTcEntries = (gtTcData?.fixtures ?? [])
+    .map(f => tcFixtureToEntry(f, 'GT Leagues'))
+    .filter((e): e is NonNullable<ReturnType<typeof tcFixtureToEntry>> => e !== null);
+
+  // Cloudbet Web API → schedule entry formátum
+  const cbWebEntries = cbWebRaw
+    .map(ev => cbWebEventToEntry(ev))
+    .filter((e): e is NonNullable<ReturnType<typeof cbWebEventToEntry>> => e !== null);
+
+  const cbWebGT  = cbWebEntries.filter(e => e.league === 'GT Leagues');
+  const cbWebAdriatic = cbWebEntries.filter(e => e.league === 'eAdriatic League');
+
+  // Deduplikálás player kulcs alapján — prioritás: msport > Cloudbet API > Cloudbet Web > TC > esb
+  const allKeys = new Set(msportRaw.map(m => `${m.playerHome.toLowerCase()}|${m.playerAway.toLowerCase()}`));
+
+  // eAdriatic: Cloudbet API deduplikálva msport-hoz képest
+  const cloudbetOnly = cloudbetRaw.filter(
+    m => !allKeys.has(`${m.playerHome.toLowerCase()}|${m.playerAway.toLowerCase()}`),
+  );
+  cloudbetOnly.forEach(m => allKeys.add(`${m.playerHome.toLowerCase()}|${m.playerAway.toLowerCase()}`));
+
+  // eAdriatic: Cloudbet Web deduplikálva msport + Cloudbet API-hoz képest
+  const cbWebAdriaticOnly = cbWebAdriatic.filter(
+    m => !allKeys.has(`${m.playerHome.toLowerCase()}|${m.playerAway.toLowerCase()}`),
+  );
+  cbWebAdriaticOnly.forEach(m => allKeys.add(`${m.playerHome.toLowerCase()}|${m.playerAway.toLowerCase()}`));
+
+  // GT Leagues: Cloudbet Web deduplikálva (msport után)
+  const cbWebGTOnly = cbWebGT.filter(
+    m => !allKeys.has(`${m.playerHome.toLowerCase()}|${m.playerAway.toLowerCase()}`),
+  );
+  cbWebGTOnly.forEach(m => allKeys.add(`${m.playerHome.toLowerCase()}|${m.playerAway.toLowerCase()}`));
+
+  // GT Leagues: TC deduplikálva (msport + Cloudbet Web-hez képest)
+  const gtTcOnly = gtTcEntries.filter(
+    m => !allKeys.has(`${m.playerHome.toLowerCase()}|${m.playerAway.toLowerCase()}`),
+  );
+  gtTcOnly.forEach(m => allKeys.add(`${m.playerHome.toLowerCase()}|${m.playerAway.toLowerCase()}`));
+
+  // GT Leagues esb: deduplikálva (minden előző forrás után)
+  const esbGT = esb.filter(e => e.league === 'GT Leagues'
+    && !allKeys.has(`${e.playerHome.toLowerCase()}|${e.playerAway.toLowerCase()}`),
+  );
+  const esbOther = esb.filter(e => e.league !== 'GT Leagues');
+
+  console.log(`[schedule] msport: ${msportRaw.length} | Cloudbet API eAdr: ${cloudbetOnly.length} | Cloudbet Web: GT=${cbWebGTOnly.length} eAdr=${cbWebAdriaticOnly.length} | TC GT: ${gtTcOnly.length} | esb GT: ${esbGT.length}`);
+
+  // Napi accumulator frissítése (cached getMsportOdds — 10 perces cache, nem okoz extra kérést)
   try { const odds = await getMsportOdds(); updateDailyAccum(odds); } catch { /* silent */ }
 
-  // Shift TC times from BST/CET (UTC+1) to Budapest CEST (UTC+2), then filter
+  // filterTCSchedule: upcoming meccseket tartja meg (score nélküliek, jövőbeli idő)
+  // gtTcOnly + cbWebEntries: az idő már CEST-ben van → NEM kell shiftTCTime!
   return [
-    ...esb,
-    ...msportRaw,          // GT Leagues + eAdriatic League, valódi O/U odds-szal
+    ...esbOther,                          // Esoccer Battle stb. (GT kivétel nélkül)
+    ...msportRaw,                         // GT Leagues + eAdriatic (msport, ha elérhető)
+    ...cloudbetOnly,                      // eAdriatic (Cloudbet API key)
+    ...cbWebAdriaticOnly,                 // eAdriatic (Cloudbet Web, 2. fallback)
+    ...cbWebGTOnly,                       // GT Leagues (Cloudbet Web, kulcs nélkül!) ← ÚJ
+    ...filterTCSchedule(gtTcOnly),        // GT Leagues (TC fallback)
+    ...esbGT,                             // GT Leagues (esb) — ha minden más üres
     ...filterTCSchedule(h2hRaw.map(shiftTCTime)),
     ...filterTCSchedule(voltaRaw.map(shiftTCTime)),
   ];
@@ -254,10 +426,54 @@ async function getPlayerStatsTC(playerName: string, league: TotalCornerLeague): 
   };
 }
 
-/** Unified player stats: esoccerbet.org or TC fallback */
+/** Unified player stats: msport (GT/eAdriatic), TC (H2H GG) vagy esoccerbet fallback */
 async function getPlayerStats(playerName: string, league: string): Promise<PlayerStats> {
   if (TC_ONLY_LEAGUES.has(league)) {
     return getPlayerStatsTC(playerName, league as TotalCornerLeague);
+  }
+  // GT Leagues + eAdriatic League → KIZÁRÓLAG msport.com
+  // esoccerbet.org teljesen kizárva ennél a két ligánál.
+  if (league === 'GT Leagues' || league === 'eAdriatic League') {
+    try {
+      const lastMatches = await getMsportPlayerLastMatches(playerName, league);
+      const total = lastMatches.length;
+      if (total > 0) {
+        const wins   = lastMatches.filter(m => m.result === 'win').length;
+        const draws  = lastMatches.filter(m => m.result === 'draw').length;
+        const losses = lastMatches.filter(m => m.result === 'loss').length;
+        const winRate  = wins / total;
+        const gfTotal  = lastMatches.reduce((s, m) => s + m.scoreHome, 0);
+        const gaTotal  = lastMatches.reduce((s, m) => s + m.scoreAway, 0);
+        const last10 = lastMatches.slice(0, 10);
+        const wr10   = last10.length > 0 ? last10.filter(m => m.result === 'win').length / last10.length : winRate;
+        const ouLines = [1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5];
+        const ouStats = ouLines.map(line => {
+          const over = lastMatches.filter(m => m.scoreHome + m.scoreAway > line).length / total;
+          return { line: String(line), over, under: 1 - over };
+        });
+        return {
+          name: playerName, league,
+          matches: total, wins, draws, losses,
+          winRate, lossRate: losses / total, drawRate: draws / total,
+          goalDiff: gfTotal - gaTotal,
+          gfPerMatch: gfTotal / total, gaPerMatch: gaTotal / total,
+          form10: wr10 - winRate, form50: 0, form200: 0,
+          bttsYes: lastMatches.filter(m => m.scoreHome > 0 && m.scoreAway > 0).length / total,
+          ouStats, lastMatches,
+        };
+      }
+    } catch { /* silent */ }
+    // msport results üres (endpoint még nem elérhető) → alapértelmezett üres stats
+    return {
+      name: playerName, league,
+      matches: 0, wins: 0, draws: 0, losses: 0,
+      winRate: 0.5, lossRate: 0.25, drawRate: 0.25,
+      goalDiff: 0, gfPerMatch: 3.5, gaPerMatch: 3.5,
+      form10: 0, form50: 0, form200: 0,
+      bttsYes: 0.5,
+      ouStats: [1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5].map(line => ({ line: String(line), over: 0.5, under: 0.5 })),
+      lastMatches: [],
+    };
   }
   return scrapePlayerStats(playerName, league);
 }
@@ -379,6 +595,228 @@ app.get('/api/msport-debug', async (_req, res) => {
   }
 });
 
+// GET /api/cloudbet-debug — Cloudbet API teszt
+app.get('/api/cloudbet-debug', async (_req, res) => {
+  try {
+    const result = await testCloudbetApi();
+    res.json(result);
+  } catch (e: unknown) {
+    res.json({ ok: false, error: e instanceof Error ? e.message : 'Unknown' });
+  }
+});
+
+// GET /api/cloudbet-status — API kulcs állapota
+app.get('/api/cloudbet-status', (_req, res) => {
+  res.json(getCloudbetKeyStatus());
+});
+
+// GET /api/cloudbet-raw — nyers API válasz debug (sport lista + competition próbák)
+app.get('/api/cloudbet-raw', async (_req, res) => {
+  const rawKey = process.env.CLOUDBET_API_KEY || '';
+  // Idézőjelek eltávolítása, ha valaki mégis beletette
+  const key = rawKey.replace(/^["']|["']$/g, '').trim();
+
+  const keyInfo = {
+    length: key.length,
+    first8: key.slice(0, 8),
+    last8: key.slice(-8),
+    hasQuotes: rawKey !== key,
+    startsWithEyJ: key.startsWith('eyJ'),
+  };
+  console.log(`[cloudbet-raw] kulcs info:`, keyInfo);
+
+  const ax = (await import('axios')).default;
+  const results: Record<string, any> = { keyInfo };
+
+  // Header variációk kipróbálása
+  const headerVariants = [
+    { label: 'X-API-Key', headers: { 'X-API-Key': key, 'Accept': 'application/json' } },
+    { label: 'Authorization Bearer', headers: { 'Authorization': `Bearer ${key}`, 'Accept': 'application/json' } },
+    { label: 'X-API-Key + Content-Type', headers: { 'X-API-Key': key, 'Accept': 'application/json', 'Content-Type': 'application/json' } },
+  ];
+
+  results.sports_attempts = {};
+  for (const v of headerVariants) {
+    try {
+      const r = await ax.get('https://sports-api.cloudbet.com/pub/v2/odds/sports', {
+        headers: v.headers, timeout: 8_000,
+      });
+      results.sports_attempts[v.label] = {
+        status: 'ok',
+        sportCount: Array.isArray(r.data?.sports) ? r.data.sports.length : '?',
+        data: r.data,
+      };
+      // Ha valamelyik működik, ne próbáljuk tovább
+      break;
+    } catch (e: any) {
+      results.sports_attempts[v.label] = { status: e.response?.status ?? 'error', msg: e.message };
+    }
+  }
+
+  // Ha valamelyik sports kérés OK volt, próbáljuk az esport-fifa kompetíciókat
+  const workingVariant = headerVariants.find(v => results.sports_attempts[v.label]?.status === 'ok');
+  if (workingVariant) {
+    try {
+      const r = await ax.get('https://sports-api.cloudbet.com/pub/v2/odds/sports/esport-fifa', {
+        headers: workingVariant.headers, timeout: 8_000,
+      });
+      results.esport_fifa = r.data;
+    } catch (e: any) {
+      results.esport_fifa_error = e.message;
+    }
+  }
+
+  res.json(results);
+});
+
+// GET /api/cloudbet-competitions — listázza az összes esport-fifa versenyt (key-kereséshez)
+app.get('/api/cloudbet-competitions', async (_req, res) => {
+  try {
+    const competitions = await listCloudbetCompetitions();
+    res.json({ count: competitions.length, competitions });
+  } catch (e: unknown) {
+    res.json({ error: e instanceof Error ? e.message : 'Unknown' });
+  }
+});
+
+// GET /api/cloudbet-discover — részletes verseny-lista event számokkal
+app.get('/api/cloudbet-discover', async (_req, res) => {
+  try {
+    const competitions = await discoverCloudbetCompetitions();
+    res.json({ count: competitions.length, competitions });
+  } catch (e: unknown) {
+    res.json({ error: e instanceof Error ? e.message : 'Unknown' });
+  }
+});
+
+// ── Cloudbet belső Web API (kulcs nélkül!) ────────────────────────────────────
+
+// GET /api/cloudbet-web-schedule?league=eAdriatic+League — menetrend (belső API)
+app.get('/api/cloudbet-web-schedule', async (req, res) => {
+  try {
+    const league = req.query.league as string | undefined;
+    const events = await getCloudbetWebSchedule(league);
+    res.json({ count: events.length, events });
+  } catch (e: unknown) {
+    res.json({ error: e instanceof Error ? e.message : 'Unknown' });
+  }
+});
+
+// GET /api/cloudbet-web-live?league=eAdriatic+League — élő eredmények
+app.get('/api/cloudbet-web-live', async (req, res) => {
+  try {
+    const league = req.query.league as string | undefined;
+    const scores = await getCloudbetWebLiveScores(league);
+    res.json({ count: scores.length, scores });
+  } catch (e: unknown) {
+    res.json({ error: e instanceof Error ? e.message : 'Unknown' });
+  }
+});
+
+// GET /api/cloudbet-web-results?league=eAdriatic+League — befejezett meccsek (H2H DB)
+app.get('/api/cloudbet-web-results', async (req, res) => {
+  try {
+    const league = req.query.league as string | undefined;
+    const results = await getCloudbetWebResults(league);
+    res.json({ count: results.length, results: results.slice(0, 50) });
+  } catch (e: unknown) {
+    res.json({ error: e instanceof Error ? e.message : 'Unknown' });
+  }
+});
+
+// GET /api/cloudbet-web-h2h?teamA=...&teamB=...&league=...&days=30 — H2H adatok
+app.get('/api/cloudbet-web-h2h', async (req, res) => {
+  try {
+    const teamA  = (req.query.teamA  as string) || '';
+    const teamB  = (req.query.teamB  as string) || '';
+    const league = req.query.league  as string | undefined;
+    const days   = parseInt(req.query.days as string || '30');
+    const matches = await getCloudbetWebH2H(teamA, teamB, league, days);
+    res.json({ count: matches.length, matches });
+  } catch (e: unknown) {
+    res.json({ error: e instanceof Error ? e.message : 'Unknown' });
+  }
+});
+
+// GET /api/cloudbet-web-all — összes event (debug)
+app.get('/api/cloudbet-web-all', async (_req, res) => {
+  try {
+    const events = await getCloudbetWebAllEvents();
+    res.json({ count: events.length, events });
+  } catch (e: unknown) {
+    res.json({ error: e instanceof Error ? e.message : 'Unknown' });
+  }
+});
+
+// GET /api/cloudbet-web-h2h-stats — H2H DB státusza
+app.get('/api/cloudbet-web-h2h-stats', async (_req, res) => {
+  try {
+    const stats = getCloudbetWebH2HStats();
+    res.json(stats);
+  } catch (e: unknown) {
+    res.json({ error: e instanceof Error ? e.message : 'Unknown' });
+  }
+});
+
+// POST /api/cloudbet-web-clear — cache törlés
+app.post('/api/cloudbet-web-clear', (_req, res) => {
+  clearCloudbetWebCache();
+  res.json({ ok: true });
+});
+
+// GET /api/msport-results-debug — lezárt meccsek eredménye (fejlesztéshez)
+// Megmutatja melyik endpoint működik és hány meccs jött vissza.
+app.get('/api/msport-results-debug', async (_req, res) => {
+  try {
+    const results = await getMsportMatchResults();
+    res.json({
+      total: results.length,
+      gt: results.filter(r => r.league === 'GT Leagues').length,
+      eAdriatic: results.filter(r => r.league === 'eAdriatic League').length,
+      sample: results.slice(0, 5),
+    });
+  } catch (e: unknown) {
+    res.json({ error: e instanceof Error ? e.message : 'Unknown' });
+  }
+});
+
+// GET /api/accum-debug — score accumulator állapota (fejlesztéshez)
+// Megmutatja hány meccs van a dailyMatchMap-ben, hány lett már lezárva,
+// hány fog kelleni a pollhoz, és az utolsó injektált eredmények.
+app.get('/api/accum-debug', async (_req, res) => {
+  try {
+    const now = Date.now();
+    const BUFFER_AFTER  =  2 * 60 * 1000;
+    const GIVE_UP_AFTER = 35 * 60 * 1000;
+    const all = Array.from(dailyMatchMap.values());
+    const toCheck = all.filter(m => {
+      if (_completedEventIds.has(m.eventId)) return false;
+      const duration = MATCH_DURATION_MS[m.league] ?? 12 * 60 * 1000;
+      const elapsed = now - m.startTime;
+      return elapsed >= (duration + BUFFER_AFTER) && elapsed <= (duration + GIVE_UP_AFTER);
+    });
+    const results = await getMsportMatchResults();
+    res.json({
+      dailyMapSize: all.length,
+      completedInjected: _completedEventIds.size,
+      pendingCheck: toCheck.length,
+      toCheckSample: toCheck.slice(0, 5).map(m => ({
+        playerA: m.playerA, playerB: m.playerB, league: m.league,
+        startedMinsAgo: Math.round((now - m.startTime) / 60000),
+      })),
+      totalResultsAvailable: results.length,
+      gtResults: results.filter(r => r.league === 'GT Leagues').length,
+      eAdriaticResults: results.filter(r => r.league === 'eAdriatic League').length,
+      lastInjected: results
+        .sort((a, b) => b.startTime - a.startTime)
+        .slice(0, 10)
+        .map(r => ({ playerA: r.playerA, scoreA: r.scoreA, scoreB: r.scoreB, playerB: r.playerB, league: r.league, date: r.date })),
+    });
+  } catch (e: unknown) {
+    res.json({ error: e instanceof Error ? e.message : 'Unknown' });
+  }
+});
+
 // POST /api/msport-cookie — msport.com session cookie beállítása (DevTools-ból másolva)
 // Body: { "cookie": "cookie1=val1; cookie2=val2; ..." }
 app.post('/api/msport-cookie', (req, res) => {
@@ -388,7 +826,60 @@ app.post('/api/msport-cookie', (req, res) => {
     return;
   }
   setMsportCookie(cookie);
+  clearFixtureCache(); // fixture cache törlése az új cookie-val való frissítéshez
   res.json({ ok: true, length: cookie.trim().length, msg: 'Cookie beállítva. Cache törölve, következő lekérésnél az új cookie lesz használva.' });
+});
+
+// GET /api/msport-fixture-debug — fixture oldal scraper teszt (fejlesztéshez)
+// Megmutatja hány meccset sikerült parsoni az msport fixture oldaláról.
+app.get('/api/msport-fixture-debug', async (_req, res) => {
+  try {
+    clearFixtureCache(); // mindig friss lekérés debug-nál
+    const data = await scrapeMsportFixtures();
+    res.json({
+      count: data.length,
+      gt: data.filter(r => r.league === 'GT Leagues').length,
+      eAdriatic: data.filter(r => r.league === 'eAdriatic League').length,
+      sample: data.slice(0, 15),
+      msg: data.length === 0
+        ? '⚠️ Az API nem adott vissza adatot. Ellenőrizd a cookie-t vagy próbáld újra!'
+        : `✅ ${data.length} meccs sikeresen beolvasva (utolsó 14 nap)`,
+    });
+  } catch (e: unknown) {
+    res.json({ error: e instanceof Error ? e.message : 'Unknown', count: 0 });
+  }
+});
+
+// GET /api/msport-fixture-raw — fixture oldal nyers HTML-je (fejlesztéshez)
+// Megmutatja az oldal HTML struktúráját, hogy a parsert finomíthassuk.
+app.get('/api/msport-fixture-raw', async (_req, res) => {
+  try {
+    const axios_ = await import('axios');
+    const { default: axios } = axios_;
+    const resp = await axios.get('https://www.msport.com/gh/web/my_matches/fixture?tab=sr:sport:137', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Referer': 'https://www.msport.com/',
+      },
+      timeout: 15_000,
+      responseType: 'text',
+    });
+    const html = resp.data as string;
+    res.json({
+      status: resp.status,
+      contentType: resp.headers['content-type'],
+      htmlLength: html.length,
+      // Az első 8000 karakter — elegendő a struktúra megértéséhez
+      preview: html.slice(0, 8000),
+      // Keresünk "vs" szövegre a HTML-ben — megmutatja van-e meccs adat
+      vsOccurrences: (html.match(/ vs /gi) || []).length,
+      // Zárójelek száma — játékosneveket jelöl
+      parenOccurrences: (html.match(/\([A-Z][a-z]+\)/g) || []).length,
+    });
+  } catch (e: unknown) {
+    res.json({ error: e instanceof Error ? e.message : 'Unknown' });
+  }
 });
 
 // GET /api/msport-cookie — aktuális cookie státusz
@@ -415,8 +906,9 @@ app.get('/api/debug-schedule', async (_req, res) => {
 });
 
 // GET /api/live-scores — élő meccsek gólállása + menetideje
-// Forrás 1: Altenar/vegas.hu  → GT Leagues
-// Forrás 2: msport detail API → eAdriatic League (+ GT fallback)
+// Forrás 1: Altenar/vegas.hu    → GT Leagues
+// Forrás 2: msport detail API   → eAdriatic League (+ GT fallback)
+// Forrás 3: Cloudbet Web API    → GT + eAdriatic (kulcs nélkül, fallback)
 app.get('/api/live-scores', async (_req, res) => {
   try {
     // 1. Altenar live scores (GT Leagues)
@@ -436,12 +928,44 @@ app.get('/api/live-scores', async (_req, res) => {
       ? await getMsportLiveScores(liveEventIds).catch(() => [])
       : [];
 
-    // Összefűzés — msport-os meccseket az Altenar lista kiegészíti
-    // (ha mindkét forrásban szerepel, az Altenar marad — GT Leagues-nél pontosabb)
+    // 3. Cloudbet Web API live scores (GT + eAdriatic, kulcs nélkül)
+    const cbWebLive = await getCloudbetWebLiveScores().catch(() => []);
+    const cbWebConverted = cbWebLive.map(s => {
+      const parseTeam = (n: string) => {
+        const m = n.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+        return m ? { team: m[1].trim(), player: m[2].trim() } : { team: n, player: n };
+      };
+      const home = parseTeam(s.homeTeam);
+      const away = parseTeam(s.awayTeam);
+      return {
+        playerA: home.player,
+        playerB: away.player,
+        teamA: home.team,
+        teamB: away.team,
+        scoreA: s.homeScore,
+        scoreB: s.awayScore,
+        matchTime: s.matchTimeSeconds > 0 ? `${Math.floor(s.matchTimeSeconds / 60)}'` : s.eventTime,
+        league: s.league,
+        status: s.eventStatus,
+        source: 'cloudbet-web',
+      };
+    });
+
+    // Összefűzés — Altenar > msport > Cloudbet Web (deduplikálás player kulcs alapján)
     const altenarKeys = new Set(altenarScores.map(s => `${s.playerA}|${s.playerB}`));
     const msportOnly = msportScores.filter(s => !altenarKeys.has(`${s.playerA}|${s.playerB}`));
 
-    res.json([...altenarScores, ...msportOnly]);
+    const existingKeys = new Set([
+      ...altenarScores.map(s => `${s.playerA}|${s.playerB}`),
+      ...msportOnly.map(s => `${s.playerA}|${s.playerB}`),
+    ]);
+    const cbWebOnly = cbWebConverted.filter(s => !existingKeys.has(`${s.playerA}|${s.playerB}`));
+
+    if (cbWebOnly.length > 0) {
+      console.log(`[live-scores] Cloudbet Web live: ${cbWebOnly.length} meccs`);
+    }
+
+    res.json([...altenarScores, ...msportOnly, ...cbWebOnly]);
   } catch {
     res.json([]);
   }
@@ -855,12 +1379,10 @@ app.get('/api/top-tips', async (req, res) => {
     if (leagueFilter) schedule = schedule.filter(m => m.league === leagueFilter);
 
     // 1b. Load totalcorner fixtures for matchId lookup (per league)
-    // Map EsoccerBet league names to TC league names where applicable.
-    // Note: EsoccerBet "GT Leagues" and TC "Esoccer GT Leagues" are DIFFERENT leagues
-    // with different player rosters, so no mapping for that.
     const esbToTcLeague: Record<string, string> = {
       'Esoccer Battle': 'Esoccer Battle',
       'eAdriatic League': 'Esoccer Adriatic League',
+      'GT Leagues': 'GT Leagues',   // TC ugyanilyen névvel ismeri (id=12985)
     };
     const tcFixturesByLeague = new Map<string, Map<string, string>>();
     // Map: ESB league -> "playerA|playerB" (both directions) -> matchId
@@ -932,24 +1454,43 @@ app.get('/api/top-tips', async (req, res) => {
           const formToWinRate = (p: PlayerStats) => p.winRate > 0 ? p.winRate : (p.matches > 0 ? p.wins / p.matches : 0.5);
           const forma = (p: PlayerStats) => Math.max(0, Math.min(1, formToWinRate(p) + p.form10));
 
-          // === MULTI-SOURCE H2H (esoccerbet + totalcorner, weighted by recency) ===
+          // === MULTI-SOURCE H2H ===
+          // GT Leagues + eAdriatic: msport.com (esb fallback ha üres)
+          // Többi liga: esoccerbet + TotalCorner
 
-          // 1. Normalize esoccerbet H2H to common format
+          const isMsportLeague = entry.league === 'GT Leagues' || entry.league === 'eAdriatic League';
+
+          // msport H2H (GT + eAdriatic)
+          let msportH2HResult: Awaited<ReturnType<typeof getMsportH2H>> | null = null;
+          if (isMsportLeague) {
+            try {
+              msportH2HResult = await getMsportH2H(entry.playerHome, entry.playerAway, entry.league);
+            } catch { /* silent */ }
+          }
+
+          // 1. Normalize H2H to common format
+          // GT + eAdriatic: msport (esb kizárva, más játékosok)
+          // Többi liga: esoccerbet
           const esbH2H: NormalizedH2H[] = [];
           const h2hFromA = a.lastMatches.filter(m => m.opponent.toLowerCase() === entry.playerAway.toLowerCase());
           const h2hFromB = b.lastMatches.filter(m => m.opponent.toLowerCase() === entry.playerHome.toLowerCase());
-          for (const m of h2hFromA) {
-            esbH2H.push({ date: m.date, goalsA: m.scoreHome, goalsB: m.scoreAway, source: 'esoccerbet' });
-          }
-          for (const m of h2hFromB) {
-            esbH2H.push({ date: m.date, goalsA: m.scoreAway, goalsB: m.scoreHome, source: 'esoccerbet' });
+          if (!isMsportLeague) {
+            for (const m of h2hFromA) {
+              esbH2H.push({ date: m.date, goalsA: m.scoreHome, goalsB: m.scoreAway, source: 'esoccerbet' });
+            }
+            for (const m of h2hFromB) {
+              esbH2H.push({ date: m.date, goalsA: m.scoreAway, goalsB: m.scoreHome, source: 'esoccerbet' });
+            }
           }
 
           // 2. Totalcorner fixture matchId lookup
+          // GT Leagues: TC H2H engedélyezve (msport fallback amikor rate-limited)
+          // eAdriatic: TC H2H kizárva (Cloudbet/msport eltérő player neveket használhat)
           const fixtureMap = tcFixturesByLeague.get(entry.league);
           const tcMatchId = fixtureMap?.get(`${entry.playerHome.toLowerCase()}|${entry.playerAway.toLowerCase()}`);
           let tcH2H: NormalizedH2H[] = [];
-          if (tcMatchId) {
+          const tcH2HEnabled = true; // minden liga — eAdriatic: TC player nevek is egyezhetnek
+          if (tcMatchId && tcH2HEnabled) {
             try {
               const tcRaw = await cached(`tc:h2h:${tcMatchId}`, () =>
                 scrapeTCH2H(tcMatchId, entry.playerHome, entry.playerAway)
@@ -960,32 +1501,65 @@ app.get('/api/top-tips', async (req, res) => {
             }
           }
 
+          // msport H2H → NormalizedH2H formátumba konvertálva
+          const msportNormH2H: NormalizedH2H[] = (msportH2HResult?.matches ?? []).map(m => ({
+            date: m.date, goalsA: m.scoreA, goalsB: m.scoreB, source: 'msport' as any,
+          }));
+
           // H2H meccs-lista a kártyán való megjelenítéshez
-          const h2hMatchHistoryRaw: Array<{date: string; goalsA: number; goalsB: number; winner: 'A'|'B'|'draw'}> = [];
-          const seenH2HKeys = new Set<string>();
-          for (const m of h2hFromA) {
-            const key = `${m.date}|${m.scoreHome}-${m.scoreAway}`;
-            if (!seenH2HKeys.has(key)) {
-              seenH2HKeys.add(key);
-              h2hMatchHistoryRaw.push({ date: m.date, goalsA: m.scoreHome, goalsB: m.scoreAway,
-                winner: m.scoreHome > m.scoreAway ? 'A' : m.scoreHome < m.scoreAway ? 'B' : 'draw' });
+          let h2hMatchHistory: Array<{date: string; goalsA: number; goalsB: number; winner: 'A'|'B'|'draw'}>;
+          if (isMsportLeague && (msportH2HResult?.matches.length ?? 0) > 0) {
+            // msport H2H → kártyán megjelenítendő (elsődleges)
+            h2hMatchHistory = msportH2HResult!.matches.map(m => ({
+              date: m.date,
+              goalsA: m.scoreA,
+              goalsB: m.scoreB,
+              winner: m.resultA === 'win' ? 'A' : m.resultA === 'loss' ? 'B' : 'draw' as 'A'|'B'|'draw',
+            }));
+          } else if (tcH2H.length > 0) {
+            // TC H2H fallback — GT Leagues esetén ha msport rate-limited
+            h2hMatchHistory = tcH2H.slice(0, 10).map(m => ({
+              date: m.date,
+              goalsA: m.goalsA,
+              goalsB: m.goalsB,
+              winner: m.goalsA > m.goalsB ? 'A' : m.goalsA < m.goalsB ? 'B' : 'draw' as 'A'|'B'|'draw',
+            }));
+          } else {
+            // esb alapú H2H lista (egyéb ligák)
+            const h2hMatchHistoryRaw: Array<{date: string; goalsA: number; goalsB: number; winner: 'A'|'B'|'draw'}> = [];
+            const seenH2HKeys = new Set<string>();
+            for (const m of h2hFromA) {
+              const key = `${m.date}|${m.scoreHome}-${m.scoreAway}`;
+              if (!seenH2HKeys.has(key)) {
+                seenH2HKeys.add(key);
+                h2hMatchHistoryRaw.push({ date: m.date, goalsA: m.scoreHome, goalsB: m.scoreAway,
+                  winner: m.scoreHome > m.scoreAway ? 'A' : m.scoreHome < m.scoreAway ? 'B' : 'draw' });
+              }
             }
-          }
-          for (const m of h2hFromB) {
-            const key = `${m.date}|${m.scoreAway}-${m.scoreHome}`;
-            if (!seenH2HKeys.has(key)) {
-              seenH2HKeys.add(key);
-              h2hMatchHistoryRaw.push({ date: m.date, goalsA: m.scoreAway, goalsB: m.scoreHome,
-                winner: m.scoreAway > m.scoreHome ? 'A' : m.scoreAway < m.scoreHome ? 'B' : 'draw' });
+            for (const m of h2hFromB) {
+              const key = `${m.date}|${m.scoreAway}-${m.scoreHome}`;
+              if (!seenH2HKeys.has(key)) {
+                seenH2HKeys.add(key);
+                h2hMatchHistoryRaw.push({ date: m.date, goalsA: m.scoreAway, goalsB: m.scoreHome,
+                  winner: m.scoreAway > m.scoreHome ? 'A' : m.scoreAway < m.scoreHome ? 'B' : 'draw' });
+              }
             }
+            h2hMatchHistory = h2hMatchHistoryRaw.sort((x, y) => y.date.localeCompare(x.date)).slice(0, 10);
           }
-          const h2hMatchHistory = h2hMatchHistoryRaw
-            .sort((x, y) => y.date.localeCompare(x.date))
-            .slice(0, 10);
 
           // 3. Merge + dedupe, H2H expiry szűrés stratégia szerint
           const h2hExpiryDays = selectedStrategy.h2hExpiryDays ?? 365;
-          const mergedH2HRaw = mergeH2HSources(esbH2H, tcH2H);
+          // GT Leagues: msport primary (ha elérhető), TC fallback; többi: esb + TC
+          let primaryH2H: NormalizedH2H[];
+          let secondaryH2H: NormalizedH2H[];
+          if (isMsportLeague) {
+            primaryH2H  = msportNormH2H.length > 0 ? msportNormH2H : tcH2H;
+            secondaryH2H = [];
+          } else {
+            primaryH2H  = esbH2H;
+            secondaryH2H = tcH2H;
+          }
+          const mergedH2HRaw = mergeH2HSources(primaryH2H, secondaryH2H);
           const cutoff = new Date();
           cutoff.setDate(cutoff.getDate() - h2hExpiryDays);
           const mergedH2H = mergedH2HRaw.filter(m => {
@@ -1012,9 +1586,10 @@ app.get('/api/top-tips', async (req, res) => {
           const h2hOverRates = agg.total > 0 ? agg.overRates : undefined;
           const h2hEffectiveSize = agg.effectiveSize;
           const h2hSource =
-            tcH2H.length > 0 && esbH2H.length > 0 ? 'merged'
-              : tcH2H.length > 0 ? 'totalcorner'
-                : 'esoccerbet';
+            isMsportLeague && msportNormH2H.length > 0 ? 'msport.com'
+              : tcH2H.length > 0 && esbH2H.length > 0 ? 'merged'
+                : tcH2H.length > 0 ? 'totalcorner'
+                  : 'esoccerbet';
 
           const h2hRatioA = h2hTotal > 0 ? (h2hWinsA + h2hDraws * 0.5) / h2hTotal : 0.5;
 
@@ -1092,27 +1667,46 @@ app.get('/api/top-tips', async (req, res) => {
             // ignore - fallback to estimated
           }
 
-          // msport.com: GT Leagues + eAdriatic League (Vegas.hu ezeket nem fedi)
+          // Cloudbet (elsődleges) + msport.com (fallback): GT Leagues + eAdriatic League
           if (entry.league === 'GT Leagues' || entry.league === 'eAdriatic League') {
+            // 1. Cloudbet API — megbízható, IP-ban mentes, trading kulcs
             try {
-              const msportOdds = await getMsportOddsForMatch(entry.playerHome, entry.playerAway);
-              if (msportOdds && msportOdds.ouLine > 0) {
-                realOuLine    = msportOdds.ouLine;
-                realOddsOver  = msportOdds.oddsOver;
-                realOddsUnder = msportOdds.oddsUnder;
-                oddsSource    = 'msport.com';
-                console.log(`[top-tips] ✅ msport odds OK: ${entry.playerHome} vs ${entry.playerAway} | O/U ${msportOdds.ouLine}`);
-              } else {
-                console.log(`[top-tips] ❌ msport odds hiányzik: ${entry.playerHome} vs ${entry.playerAway} (${entry.league}) | pre-source: ${oddsSource}`);
+              if (getCloudbetKeyStatus().configured) {
+                const cbOdds = await getCloudbetOddsForMatch(entry.playerHome, entry.playerAway);
+                if (cbOdds && cbOdds.ouLine > 0) {
+                  realOuLine    = cbOdds.ouLine;
+                  realOddsOver  = cbOdds.oddsOver;
+                  realOddsUnder = cbOdds.oddsUnder;
+                  oddsSource    = 'cloudbet';
+                  console.log(`[top-tips] ✅ cloudbet odds OK: ${entry.playerHome} vs ${entry.playerAway} | O/U ${cbOdds.ouLine}`);
+                }
               }
             } catch (err) {
-              console.log(`[top-tips] ⚠️ msport hiba: ${entry.playerHome} vs ${entry.playerAway}: ${err}`);
+              console.log(`[top-tips] ⚠️ cloudbet hiba: ${entry.playerHome} vs ${entry.playerAway}: ${err}`);
+            }
+
+            // 2. msport.com fallback — ha Cloudbet nem adott eredményt
+            if (oddsSource !== 'cloudbet') {
+              try {
+                const msportOdds = await getMsportOddsForMatch(entry.playerHome, entry.playerAway);
+                if (msportOdds && msportOdds.ouLine > 0) {
+                  realOuLine    = msportOdds.ouLine;
+                  realOddsOver  = msportOdds.oddsOver;
+                  realOddsUnder = msportOdds.oddsUnder;
+                  oddsSource    = 'msport.com';
+                  console.log(`[top-tips] ✅ msport fallback odds OK: ${entry.playerHome} vs ${entry.playerAway} | O/U ${msportOdds.ouLine}`);
+                } else {
+                  console.log(`[top-tips] ❌ odds hiányzik: ${entry.playerHome} vs ${entry.playerAway} (${entry.league})`);
+                }
+              } catch (err) {
+                console.log(`[top-tips] ⚠️ msport hiba: ${entry.playerHome} vs ${entry.playerAway}: ${err}`);
+              }
             }
           }
 
           // GT Leagues + eAdriatic + H2H GG: csak valódi odds értelmes; n/a amíg nem tölt be
           if ((entry.league === 'GT Leagues' || entry.league === 'eAdriatic League' || entry.league === 'Esoccer H2H GG League')
-              && oddsSource !== 'vegas.hu' && oddsSource !== 'msport.com') {
+              && oddsSource !== 'vegas.hu' && oddsSource !== 'msport.com' && oddsSource !== 'cloudbet') {
             oddsSource = 'n/a';
           }
 
@@ -1291,15 +1885,26 @@ app.get('/api/top-tips', async (req, res) => {
       return true;
     });
 
-    // 4. Filter & rank (categories: STRONG_BET > BET, H2H boost, real odds boost)
-    // n/a odds-os meccsek kizárva: GT Leagues + eAdriatic → csak valódi (msport/vegas) odds-szal jelennek meg
+    // 4. Filter & rank
+    // GT Leagues + eAdriatic: MINDEN meccs megjelenik (nincs NO_BET szűrő), csak n/a kizárva.
+    //   → 1 órás előzetes nézet: az összes közelgő meccs látható odds-elemzéssel.
+    // Többi liga: csak BET / STRONG_BET, konfidencia + edge szűrővel.
+    const isMsportOnlyFilter = leagueFilter === 'GT Leagues' || leagueFilter === 'eAdriatic League';
+    const msportLimit = 60; // 1 óra ~ 5 GT + 6 eAdriatic = 11 meccs; 60 biztonságos felső korlát
+
     const valueBets = deduplicated
-      .filter(r => r.category !== 'NO_BET' && r.confidence >= minConf && r.edge >= minEdge && r.oddsSource !== 'n/a')
+      .filter(r => isMsportOnlyFilter
+        ? r.oddsSource !== 'n/a'   // GT + eAdriatic: minden meccs valódi odds-szal
+        : r.category !== 'NO_BET' && r.confidence >= minConf && r.edge >= minEdge && r.oddsSource !== 'n/a'
+      )
       .sort((a, b) => {
-        // Category score: STRONG_BET = 2, BET = 1
+        // GT + eAdriatic: idő szerint rendezve (következő meccs elöl)
+        if (isMsportOnlyFilter) {
+          return a.time.localeCompare(b.time);
+        }
+        // Többi liga: Category score: STRONG_BET = 2, BET = 1
         const catScore = (t: typeof a) => (t.category === 'STRONG_BET' ? 2 : 1);
         if (catScore(b) !== catScore(a)) return catScore(b) - catScore(a);
-
         // Within same category: H2H + real odds + weighted conf/edge
         const h2hBoost = (t: typeof a) => (t.h2hMode ? 0.10 : 0);
         const oddsBoost = (t: typeof a) => (t.oddsSource === 'bet365' ? 0.05 : 0);
@@ -1307,7 +1912,7 @@ app.get('/api/top-tips', async (req, res) => {
         const scoreB = b.confidence * 0.6 + b.edge * 4 + h2hBoost(b) + oddsBoost(b);
         return scoreB - scoreA;
       })
-      .slice(0, limit);
+      .slice(0, isMsportOnlyFilter ? msportLimit : limit);
 
     res.json({
       generated: new Date().toISOString(),
@@ -1700,10 +2305,15 @@ configureTrendScanner({
   },
   getOdds: async (playerA, playerB) => {
     try {
-      // Elsőként msport.com (GT Leagues + eAdriatic League)
+      // 1. Cloudbet API (elsődleges — IP-ban mentes)
+      if (getCloudbetKeyStatus().configured) {
+        const cb = await getCloudbetOddsForMatch(playerA, playerB);
+        if (cb && cb.ouLine > 0) return cb;
+      }
+      // 2. msport.com fallback
       const msport = await getMsportOddsForMatch(playerA, playerB);
       if (msport && msport.ouLine > 0) return msport;
-      // Fallback: Vegas.hu (Altenar) — többi liga
+      // 3. Vegas.hu (Altenar) — többi liga
       const v = await getVegasOdds(playerA, playerB);
       if (v && v.ouLine > 0) return { ouLine: v.ouLine, oddsOver: v.oddsOver };
       return null;
@@ -2186,6 +2796,7 @@ app.post('/api/journal', (req, res) => {
 
 // GET /api/h2h-quick/:playerA/:playerB?league=...
 // Könnyű H2H endpoint a Napi Mérkőzések kártyákhoz.
+// GT Leagues + eAdriatic League: msport.com forrás (esb fallback ha üres).
 // Visszaadja az utolsó 10 egymás elleni meccset + gólátlagot.
 app.get('/api/h2h-quick/:playerA/:playerB', async (req, res) => {
   try {
@@ -2193,36 +2804,33 @@ app.get('/api/h2h-quick/:playerA/:playerB', async (req, res) => {
     const pA = req.params.playerA;
     const pB = req.params.playerB;
 
+    // GT + eAdriatic → KIZÁRÓLAG msport.com (esoccerbet teljesen kizárva)
+    if (league === 'GT Leagues' || league === 'eAdriatic League') {
+      try {
+        const msport = await getMsportH2H(pA, pB, league);
+        return res.json(msport); // üres matches[] is visszamegy, ha nincs adat
+      } catch {
+        return res.json({ matches: [], avgGoals: null, todayCount: 0 });
+      }
+    }
+
+    // Más ligák → esoccerbet.org
     const [a, b] = await Promise.all([
       cached(`player:${pA}:${league}`, () => scrapePlayerStats(pA, league)),
       cached(`player:${pB}:${league}`, () => scrapePlayerStats(pB, league)),
     ]);
 
-    // Egymás elleni meccsek A szemszögéből
     const fromA = a.lastMatches
       .filter(m => m.opponent.toLowerCase() === pB.toLowerCase())
-      .map(m => ({
-        date: m.date,
-        scoreA: m.scoreHome,
-        scoreB: m.scoreAway,
-        totalGoals: m.scoreHome + m.scoreAway,
-        resultA: m.result as 'win' | 'loss' | 'draw',
-        source: 'A',
-      }));
+      .map(m => ({ date: m.date, scoreA: m.scoreHome, scoreB: m.scoreAway,
+        totalGoals: m.scoreHome + m.scoreAway, resultA: m.result as 'win'|'loss'|'draw' }));
 
-    // Egymás elleni meccsek B szemszögéből (fordított score)
     const fromB = b.lastMatches
       .filter(m => m.opponent.toLowerCase() === pA.toLowerCase())
-      .map(m => ({
-        date: m.date,
-        scoreA: m.scoreAway,   // B lapjáról nézve: away = A
-        scoreB: m.scoreHome,
+      .map(m => ({ date: m.date, scoreA: m.scoreAway, scoreB: m.scoreHome,
         totalGoals: m.scoreHome + m.scoreAway,
-        resultA: (m.result === 'win' ? 'loss' : m.result === 'loss' ? 'win' : 'draw') as 'win' | 'loss' | 'draw',
-        source: 'B',
-      }));
+        resultA: (m.result === 'win' ? 'loss' : m.result === 'loss' ? 'win' : 'draw') as 'win'|'loss'|'draw' }));
 
-    // Összefűzés + deduplikálás dátum alapján
     const seen = new Set<string>();
     const all = [...fromA, ...fromB].filter(m => {
       const key = `${m.date}|${m.scoreA}:${m.scoreB}`;
@@ -2230,21 +2838,13 @@ app.get('/api/h2h-quick/:playerA/:playerB', async (req, res) => {
       seen.add(key);
       return true;
     });
-
-    // Rendezés dátum szerint (legújabb elöl)
     all.sort((x, y) => (y.date > x.date ? 1 : -1));
     const matches = all.slice(0, 10);
-
     const avgGoals = matches.length > 0
-      ? matches.reduce((s, m) => s + m.totalGoals, 0) / matches.length
-      : null;
-
-    // Mai nap prefix
+      ? matches.reduce((s, m) => s + m.totalGoals, 0) / matches.length : null;
     const now = new Date();
-    const todayPrefix = `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
-    const todayMatches = matches.filter(m => m.date.startsWith(todayPrefix));
-
-    res.json({ matches, avgGoals, todayCount: todayMatches.length });
+    const todayPrefix = `${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')}`;
+    res.json({ matches, avgGoals, todayCount: matches.filter(m => m.date.startsWith(todayPrefix)).length });
   } catch (e: any) {
     res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
   }
@@ -2271,6 +2871,78 @@ app.get('/api/daily-matches', async (req, res) => {
   }
 });
 
+// ============ SCORE ACCUMULATOR POLLER ============
+// Háttérben futó poller: 60 mp-enként ellenőrzi az aznap induló meccseket.
+// Ha egy meccs várható vége eltelt (+2 perc buffer), lekéri az msport match/detail
+// végpontot. Ha isLive=false → a meccs véget ért → injektálja az eredményt a
+// getMsportMatchResults() tárolóba → H2H adatok azonnal elérhetők lesznek.
+//
+// Miért kell ez? Az msport-on nincs dedikált "results" végpont, ezért az
+// eredményeket menet közben gyűjtjük a detail API-ból.
+
+const MATCH_DURATION_MS: Record<string, number> = {
+  'GT Leagues':      12 * 60 * 1000,
+  'eAdriatic League': 10 * 60 * 1000,
+};
+const _completedEventIds = new Set<string>(); // már injektált eventId-k
+
+async function pollCompletedMatchScores(): Promise<void> {
+  const now = Date.now();
+  const BUFFER_AFTER  =  2 * 60 * 1000; // 2 perc buffer a meccs után
+  const GIVE_UP_AFTER = 35 * 60 * 1000; // 35 percnél régebbi → már nem pollolunk
+
+  const toCheck = Array.from(dailyMatchMap.values()).filter(m => {
+    if (_completedEventIds.has(m.eventId)) return false; // már injektáltuk
+    const duration = MATCH_DURATION_MS[m.league] ?? 12 * 60 * 1000;
+    const elapsed = now - m.startTime;
+    return elapsed >= (duration + BUFFER_AFTER) && elapsed <= (duration + GIVE_UP_AFTER);
+  });
+
+  if (toCheck.length === 0) return;
+  console.log(`[accum] ${toCheck.length} meccs ellenőrzése (befejezési státusz)...`);
+
+  const newResults: MsportMatchResult[] = [];
+  for (const m of toCheck) {
+    try {
+      const scores = await getMsportLiveScores([m.eventId]);
+      const score = scores[0];
+      if (score && !score.isLive) {
+        // Meccs befejezve — végeredmény rögzítése
+        const d = new Date(m.startTime + 2 * 3600 * 1000); // Budapest CEST = UTC+2
+        const date =
+          `${String(d.getUTCMonth() + 1).padStart(2, '0')}/${String(d.getUTCDate()).padStart(2, '0')} ` +
+          `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+        newResults.push({
+          eventId:   m.eventId,
+          playerA:   score.playerA,   // kisbetűs (fetchMatchDetail normalizálja)
+          playerB:   score.playerB,
+          teamA:     m.teamA,
+          teamB:     m.teamB,
+          scoreA:    score.scoreA,
+          scoreB:    score.scoreB,
+          startTime: m.startTime,
+          league:    m.league,
+          date,
+        });
+        _completedEventIds.add(m.eventId);
+        console.log(
+          `[accum] ✅ ${score.playerA} ${score.scoreA}–${score.scoreB} ${score.playerB}` +
+          ` (${m.league}, ${date})`
+        );
+      } else if (score && score.isLive) {
+        // Még megy — legközelebb újra próbáljuk
+        console.log(`[accum] ⏳ Még él: ${score.playerA} vs ${score.playerB} (${score.minute}')`);
+      }
+    } catch {
+      // silent — legközelebb próbáljuk újra
+    }
+  }
+
+  if (newResults.length > 0) {
+    injectCompletedMatches(newResults);
+  }
+}
+
 // ============ VÉGÜK ============
 
 app.listen(3005, '0.0.0.0', () => {
@@ -2279,10 +2951,49 @@ app.listen(3005, '0.0.0.0', () => {
   // Load Telegram config from env (if set)
   loadConfigFromEnv();
 
-  // Start background scanners
-  startScanner(15 * 60 * 1000);           // top-tips scan every 15 min
-  startTrendScanner(5 * 60 * 1000);       // intraday trend scan every 5 min
+  // Start background scanners — kellően késleltetve és ritkán, hogy ne okozzanak tiltást msport-on
+  // FONTOS: scannerek csak cache-elt getMsportOdds()-t hívnak (10 perces cache) → max 6 kérés/óra
+  setTimeout(() => startScanner(20 * 60 * 1000), 60_000);        // top-tips scan: 20 percenként, 1 perc után indul
+  setTimeout(() => startTrendScanner(10 * 60 * 1000), 3 * 60_000); // trend scan: 10 percenként, 3 perc után indul
 
   // Start Telegram bot polling for commands
   startBotPolling(handleBotCommand);
+
+  // Cloudbet Web Live Score Poller — 30 másodpercenként fut (meccs idők: 17-02h)
+  // Figyeli az élő meccseket és menti a befejezett meccsek eredményét a H2H DB-be.
+  // Nem igényel API kulcsot — a cloudbet.com belső API-ját használja.
+  (function startCloudbetWebPoller() {
+    const poll = async () => {
+      try {
+        // Csak meccs időkben futtatjuk (Budapest CEST: 17:00–02:00)
+        const nowHour = new Date(Date.now() + 2 * 3600_000).getUTCHours();
+        if (nowHour < 17 && nowHour > 2) return; // pihenő idő
+
+        // Cache törlés → friss adat kérése (30mp-enként egyszer hívjuk)
+        clearCloudbetWebCache();
+        const events = await getCloudbetWebAllEvents();
+
+        const live     = events.filter(e => e.eventStatus === 'in_progress' || e.status === 'TRADING_LIVE');
+        const finished = events.filter(e => e.eventStatus === 'finished' || e.status === 'RESULTED');
+
+        if (live.length > 0) {
+          console.log(`[cloudbet-web-poller] ⚽ Élő: ${live.map(e => `${e.homeTeam} ${e.homeScore ?? '?'}-${e.awayScore ?? '?'} ${e.awayTeam}`).join(' | ')}`);
+        }
+        if (finished.length > 0) {
+          console.log(`[cloudbet-web-poller] ✅ Befejezett: ${finished.length} meccs → H2H DB mentés`);
+        }
+      } catch (_e) { /* silent */ }
+    };
+
+    // 5 perccel indítás után kezdjük (szerver inicializálás után)
+    setTimeout(() => {
+      poll();
+      setInterval(poll, 30_000); // 30 másodpercenként
+    }, 5 * 60_000);
+
+    console.log('[cloudbet-web] Live score poller inicializálva (5 perc múlva indul)');
+  })();
+
+  // Napi takarítás: régi injektált rekordok eltávolítása éjfél körül
+  setInterval(clearOldInjectedMatches, 60 * 60 * 1000); // óránként
 });

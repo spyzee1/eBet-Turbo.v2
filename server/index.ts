@@ -2579,16 +2579,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distPath = path.join(__dirname, '..', 'dist');
 
 app.use(express.static(distPath));
-// SPA fallback - only for non-API routes
-//app.get('*', (req, res) => {
-  // Skip API routes - let them 404 naturally
-  //if (req.path.startsWith('/api')) {
-  //  res.status(404).json({ error: 'API endpoint not found' });
-  //  return;
-  //}
-  // SPA fallback for non-API routes
-  //res.sendFile(path.join(distPath, 'index.html'));
-//});
+// SPA fallback — minden nem-API route az index.html-t kapja
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api')) {
+    res.status(404).json({ error: 'API endpoint not found' });
+    return;
+  }
+  res.sendFile(path.join(distPath, 'index.html'));
+});
 
 // ============ TOTALCORNER ENDPOINTS ============  
 
@@ -2952,8 +2950,9 @@ async function pollCompletedMatchScores(): Promise<void> {
 
 // ============ VÉGÜK ============
 
-app.listen(3005, '0.0.0.0', () => {
-  console.log('--- FIGYELEM: EZ A 3005-OS VERZIO ---');
+const PORT = parseInt(process.env.PORT || '3005', 10);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`--- Szerver fut: ${PORT} ---`);
 
   // Load Telegram config from env (if set)
   loadConfigFromEnv();

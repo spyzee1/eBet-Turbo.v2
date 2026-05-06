@@ -2579,16 +2579,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distPath = path.join(__dirname, '..', 'dist');
 
 app.use(express.static(distPath));
-// SPA fallback — minden nem-API route az index.html-t kapja
-app.get('/{*path}', (req, res) => {
-  if (req.path.startsWith('/api')) {
-    res.status(404).json({ error: 'API endpoint not found' });
-    return;
-  }
-  res.sendFile(path.join(distPath, 'index.html'));
-});
 
-// ============ TOTALCORNER ENDPOINTS ============  
+// ============ TOTALCORNER ENDPOINTS ============
 
 app.get('/api/tc/players/:league', async (req, res) => {
   try {
@@ -3005,4 +2997,9 @@ app.listen(PORT, '0.0.0.0', () => {
 
   // Supabase: lezárt meccsek betöltése restart után
   initCompletedMatchesFromDb().catch(e => console.error('[startup] initFromDb hiba:', e));
+});
+
+// SPA fallback — az összes API endpoint UTÁN, minden nem-API route az index.html-t kapja
+app.get('/{*path}', (_req, res) => {
+  res.sendFile(path.join(distPath, 'index.html'));
 });

@@ -49,7 +49,7 @@ import {
   injectCompletedMatches, clearOldInjectedMatches, initCompletedMatchesFromDb, MsportMatchResult,
   scrapeMsportFixtures, clearFixtureCache, getMsportUpcomingSchedule,
 } from './msport-scraper.js';
-import { initDb, loadJournal, saveJournalDb } from './db.js';
+import { initDb, loadJournal, saveJournalDb, supabase } from './db.js';
 import {
   getCloudbetOdds, getCloudbetOddsForMatch, getCloudbetSchedule,
   clearCloudbetCache, getCloudbetKeyStatus, testCloudbetApi,
@@ -481,6 +481,23 @@ app.get('/api/config', (_req, res) => {
     supabaseUrl: process.env.SUPABASE_URL ?? '',
     supabaseAnonKey: process.env.SUPABASE_ANON_KEY ?? '',
   });
+});
+
+// Delete the calling user's account (requires valid JWT in Authorization header)
+app.delete('/api/auth/delete-account', async (req, res) => {
+  const sb = supabase;
+  if (!sb) { res.status(503).json({ error: 'Supabase not configured' }); return; }
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) { res.status(401).json({ error: 'Missing token' }); return; }
+  try {
+    const { data: { user }, error: userErr } = await sb.auth.getUser(token);
+    if (userErr || !user) { res.status(401).json({ error: 'Invalid token' }); return; }
+    const { error } = await sb.auth.admin.deleteUser(user.id);
+    if (error) { res.status(500).json({ error: error.message }); return; }
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message ?? 'Unknown error' });
+  }
 });
 
 app.post('/api/cache/clear', (_req, res) => {

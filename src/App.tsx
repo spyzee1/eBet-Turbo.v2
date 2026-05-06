@@ -29,15 +29,41 @@ type View = 'dashboard' | 'topTips' | 'napiMerkezesek' | 'naplo' | 'upcoming' | 
 
 function App() {
   const [authed, setAuthed] = useState<boolean | null>(null); // null = checking
+  const [userEmail, setUserEmail] = useState<string | undefined>();
 
   useEffect(() => {
     getSupabaseClient().then(async sb => {
-      if (!sb) { setAuthed(true); return; } // no Supabase configured → open access
+      if (!sb) { setAuthed(true); return; }
       const { data: { session } } = await sb.auth.getSession();
       setAuthed(!!session);
-      sb.auth.onAuthStateChange((_ev, s) => setAuthed(!!s));
+      setUserEmail(session?.user?.email);
+      sb.auth.onAuthStateChange((_ev, s) => {
+        setAuthed(!!s);
+        setUserEmail(s?.user?.email);
+      });
     });
   }, []);
+
+  const handleLogout = async () => {
+    const sb = await getSupabaseClient();
+    if (sb) await sb.auth.signOut();
+    setAuthed(false);
+    setUserEmail(undefined);
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      const sb = await getSupabaseClient();
+      const token = sb ? (await sb.auth.getSession()).data.session?.access_token : undefined;
+      await fetch('/api/auth/delete-account', {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (sb) await sb.auth.signOut();
+    } catch { /* silent */ }
+    setAuthed(false);
+    setUserEmail(undefined);
+  };
 
   const [view, setView] = useState<View>('topTips');
   const [settings, setSettings] = useState<Settings>(loadSettings);
@@ -226,7 +252,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-dark-bg flex flex-col">
-      <TopNav current={view} onChange={setView} />
+      <TopNav current={view} onChange={setView} userEmail={userEmail} onLogout={handleLogout} onDeleteAccount={handleDeleteAccount} />
       <main className="flex-1">
         <div className="max-w-screen-2xl mx-auto p-4 lg:p-6">
           {view === 'topTips' && <TopTips onAddMatch={addMatch} />}

@@ -12,8 +12,6 @@ COPY . .
 # Build frontend
 RUN npm run build
 
-# Expose ports
-EXPOSE 3001 4173
+EXPOSE 3005
 
-# Start both API server and preview server
-CMD sh -c "npx tsx server/index.ts & npx vite preview --host --port 4173 && wait"
+CMD ["npx", "tsx", "server/index.ts"]

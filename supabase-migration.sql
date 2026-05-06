@@ -25,3 +25,21 @@ CREATE TABLE IF NOT EXISTS completed_matches (
 
 -- Index a 3 napos szűréshez
 CREATE INDEX IF NOT EXISTS idx_completed_matches_start_time ON completed_matches(start_time);
+
+-- 3. Per-user journal (replaces shared app_data 'journal' key)
+CREATE TABLE IF NOT EXISTS journals (
+  user_id    UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  entries    JSONB NOT NULL DEFAULT '[]',
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE journals ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "users_own_journal" ON journals FOR ALL USING (auth.uid() = user_id);
+
+-- 4. Per-user settings
+CREATE TABLE IF NOT EXISTS user_settings (
+  user_id    UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  settings   JSONB NOT NULL DEFAULT '{}',
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "users_own_settings" ON user_settings FOR ALL USING (auth.uid() = user_id);

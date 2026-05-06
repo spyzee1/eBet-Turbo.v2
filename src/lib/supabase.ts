@@ -3,6 +3,13 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 let client: SupabaseClient | null = null;
 let initPromise: Promise<SupabaseClient | null> | null = null;
 
+export async function getAccessToken(): Promise<string | null> {
+  const sb = await getSupabaseClient();
+  if (!sb) return null;
+  const { data: { session } } = await sb.auth.getSession();
+  return session?.access_token ?? null;
+}
+
 export async function getSupabaseClient(): Promise<SupabaseClient | null> {
   if (client) return client;
   if (initPromise) return initPromise;

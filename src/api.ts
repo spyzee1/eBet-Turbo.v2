@@ -1,4 +1,5 @@
 const API_BASE = '/api';
+import { getAccessToken } from './lib/supabase';
 
 export interface ScrapedPlayer {
   name: string;
@@ -430,9 +431,37 @@ export async function resolveResults(matches: ResolveMatch[]): Promise<ResolveRe
   } catch { return matches.map(m => ({ matchId: m.matchId, pending: true })); }
 }
 
+export async function fetchRemoteSettings(): Promise<Record<string, any> | null> {
+  try {
+    const token = await getAccessToken();
+    if (!token) return null;
+    const res = await fetch(`${API_BASE}/settings`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return Object.keys(data).length > 0 ? data : null;
+  } catch { return null; }
+}
+
+export async function saveRemoteSettings(settings: Record<string, any>): Promise<void> {
+  try {
+    const token = await getAccessToken();
+    if (!token) return;
+    await fetch(`${API_BASE}/settings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(settings),
+    });
+  } catch { /* silent */ }
+}
+
 export async function fetchJournal(): Promise<any[]> {
   try {
-    const res = await fetch(`${API_BASE}/journal`);
+    const token = await getAccessToken();
+    const res = await fetch(`${API_BASE}/journal`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!res.ok) return [];
     return res.json();
   } catch { return []; }
@@ -440,9 +469,13 @@ export async function fetchJournal(): Promise<any[]> {
 
 export async function saveJournal(entries: any[]): Promise<void> {
   try {
+    const token = await getAccessToken();
     await fetch(`${API_BASE}/journal`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify(entries),
     });
   } catch { /* silent */ }

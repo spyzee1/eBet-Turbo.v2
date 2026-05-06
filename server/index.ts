@@ -49,7 +49,7 @@ import {
   injectCompletedMatches, clearOldInjectedMatches, initCompletedMatchesFromDb, MsportMatchResult,
   scrapeMsportFixtures, clearFixtureCache, getMsportUpcomingSchedule,
 } from './msport-scraper.js';
-import { initDb, loadJournal, saveJournalDb, supabase } from './db.js';
+import { initDb, loadJournal, saveJournalDb, loadSettings as loadSettingsDb, saveSettings as saveSettingsDb, supabase } from './db.js';
 import {
   getCloudbetOdds, getCloudbetOddsForMatch, getCloudbetSchedule,
   clearCloudbetCache, getCloudbetKeyStatus, testCloudbetApi,
@@ -2787,22 +2787,50 @@ import fs from 'fs';
 const JOURNAL_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), '../data/journal.json');
 if (!fs.existsSync(path.dirname(JOURNAL_FILE))) fs.mkdirSync(path.dirname(JOURNAL_FILE), { recursive: true });
 
-app.get('/api/journal', async (_req, res) => {
+async function getUserId(req: express.Request): Promise<string | null> {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token || !supabase) return null;
   try {
-    const dbEntries = await loadJournal();
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) return null;
+    return user.id;
+  } catch { return null; }
+}
+
+app.get('/api/journal', async (req, res) => {
+  try {
+    const userId = await getUserId(req);
+    const dbEntries = await loadJournal(userId ?? undefined);
     if (dbEntries.length > 0) return res.json(dbEntries);
-    // Fallback: helyi fájl (Supabase nincs konfigurálva)
-    if (!fs.existsSync(JOURNAL_FILE)) return res.json([]);
-    res.json(JSON.parse(fs.readFileSync(JOURNAL_FILE, 'utf-8')));
+    if (!userId && fs.existsSync(JOURNAL_FILE))
+      return res.json(JSON.parse(fs.readFileSync(JOURNAL_FILE, 'utf-8')));
+    res.json([]);
   } catch { res.json([]); }
 });
 
 app.post('/api/journal', async (req, res) => {
   try {
-    // Supabase mentés
-    await saveJournalDb(req.body);
-    // Fájl backup (ha van data/ mappa)
-    try { fs.writeFileSync(JOURNAL_FILE, JSON.stringify(req.body, null, 2)); } catch { /* silent */ }
+    const userId = await getUserId(req);
+    await saveJournalDb(userId ?? undefined, req.body);
+    if (!userId) {
+      try { fs.writeFileSync(JOURNAL_FILE, JSON.stringify(req.body, null, 2)); } catch { /* silent */ }
+    }
+    res.json({ ok: true });
+  } catch { res.status(500).json({ ok: false }); }
+});
+
+app.get('/api/settings', async (req, res) => {
+  try {
+    const userId = await getUserId(req);
+    const data = await loadSettingsDb(userId ?? undefined);
+    res.json(data ?? {});
+  } catch { res.json({}); }
+});
+
+app.post('/api/settings', async (req, res) => {
+  try {
+    const userId = await getUserId(req);
+    await saveSettingsDb(userId ?? undefined, req.body);
     res.json({ ok: true });
   } catch { res.status(500).json({ ok: false }); }
 });

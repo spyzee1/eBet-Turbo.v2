@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import TopNav from './components/TopNav';
 import LoginPage from './components/LoginPage';
+import ChangePasswordModal from './components/ChangePasswordModal';
 import Dashboard from './components/Dashboard';
 import Upcoming from './components/Upcoming';
 import MatchForm from './components/MatchForm';
@@ -22,7 +23,7 @@ import {
   loadHistory, saveHistory, addToHistory,
   HistoryEntry,
 } from './model/store';
-import { autoCheckResults, resolveResults, fetchJournal, saveJournal } from './api';
+import { autoCheckResults, resolveResults, fetchJournal, saveJournal, fetchRemoteSettings, saveRemoteSettings } from './api';
 import { getSupabaseClient } from './lib/supabase';
 
 type View = 'dashboard' | 'topTips' | 'napiMerkezesek' | 'naplo' | 'upcoming' | 'newMatch' | 'playerProfile' | 'backtest' | 'history' | 'settings' | 'statistics' | 'segedlet';
@@ -30,6 +31,9 @@ type View = 'dashboard' | 'topTips' | 'napiMerkezesek' | 'naplo' | 'upcoming' | 
 function App() {
   const [authed, setAuthed] = useState<boolean | null>(null); // null = checking
   const [userEmail, setUserEmail] = useState<string | undefined>();
+  const [emailConfirmed, setEmailConfirmed] = useState(true);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(false);
 
   useEffect(() => {
     getSupabaseClient().then(async sb => {
@@ -37,12 +41,23 @@ function App() {
       const { data: { session } } = await sb.auth.getSession();
       setAuthed(!!session);
       setUserEmail(session?.user?.email);
+      setEmailConfirmed(!!session?.user?.email_confirmed_at);
       sb.auth.onAuthStateChange((_ev, s) => {
         setAuthed(!!s);
         setUserEmail(s?.user?.email);
+        setEmailConfirmed(!!s?.user?.email_confirmed_at);
       });
     });
   }, []);
+
+  const handleResendConfirmation = async () => {
+    if (resendCooldown || !userEmail) return;
+    const sb = await getSupabaseClient();
+    if (!sb) return;
+    await sb.auth.resend({ type: 'signup', email: userEmail });
+    setResendCooldown(true);
+    setTimeout(() => setResendCooldown(false), 60_000);
+  };
 
   const handleLogout = async () => {
     const sb = await getSupabaseClient();
@@ -69,10 +84,27 @@ function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [matches, setMatches] = useState<MatchInput[]>(loadMatches);
   const [history, setHistory] = useState<HistoryEntry[]>(loadHistory);
+  const settingsSynced = useRef(false);
 
   const results: MatchResult[] = matches.map(m => calculateMatch(m, settings));
 
-  useEffect(() => { saveSettings(settings); }, [settings]);
+  // Startup: pull settings from server, server takes priority over localStorage
+  useEffect(() => {
+    if (authed !== true) return;
+    fetchRemoteSettings().then(remote => {
+      if (remote && Object.keys(remote).length > 0) {
+        setSettings(s => ({ ...s, ...remote }));
+        saveSettings({ ...settings, ...remote });
+      }
+      settingsSynced.current = true;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed]);
+
+  useEffect(() => {
+    saveSettings(settings);
+    if (settingsSynced.current) saveRemoteSettings(settings);
+  }, [settings]);
   useEffect(() => { saveMatches(matches); }, [matches]);
   useEffect(() => { saveHistory(history); }, [history]);
 
@@ -252,7 +284,30 @@ function App() {
 
   return (
     <div className="min-h-screen bg-dark-bg flex flex-col">
-      <TopNav current={view} onChange={setView} userEmail={userEmail} onLogout={handleLogout} onDeleteAccount={handleDeleteAccount} />
+      <TopNav current={view} onChange={setView} userEmail={userEmail} onLogout={handleLogout} onDeleteAccount={handleDeleteAccount} onEditProfile={() => setShowPasswordModal(true)} />
+
+      {!emailConfirmed && (
+        <div className="bg-yellow-500/10 border-b border-yellow-500/30 px-4 py-3 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 text-sm text-yellow-300">
+            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+            </svg>
+            <span>Erősítsd meg az e-mail címedet a teljes hozzáféréshez. Ellenőrizd a postaládádat ({userEmail}).</span>
+          </div>
+          <button
+            onClick={handleResendConfirmation}
+            disabled={resendCooldown}
+            className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/40 text-yellow-300 disabled:opacity-50 transition cursor-pointer"
+          >
+            {resendCooldown ? 'Elküldve ✓' : 'Újraküldés'}
+          </button>
+        </div>
+      )}
+
+      {showPasswordModal && userEmail && (
+        <ChangePasswordModal email={userEmail} onClose={() => setShowPasswordModal(false)} />
+      )}
+
       <main className="flex-1">
         <div className="max-w-screen-2xl mx-auto p-4 lg:p-6">
           {view === 'topTips' && <TopTips onAddMatch={addMatch} />}

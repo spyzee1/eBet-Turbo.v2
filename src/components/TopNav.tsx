@@ -10,6 +10,7 @@ interface Props {
   userEmail?: string;
   onLogout?: () => void;
   onDeleteAccount?: () => void;
+  onEditProfile?: () => void;
 }
 
 const NAV_ITEMS: { id: View; label: string }[] = [
@@ -24,7 +25,7 @@ function avatarLetter(email?: string) {
   return email ? email[0].toUpperCase() : '?';
 }
 
-export default function TopNav({ current, onChange, userEmail, onLogout, onDeleteAccount }: Props) {
+export default function TopNav({ current, onChange, userEmail, onLogout, onDeleteAccount, onEditProfile }: Props) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -107,7 +108,7 @@ export default function TopNav({ current, onChange, userEmail, onLogout, onDelet
                   {/* Actions */}
                   <div className="py-1">
                     <button
-                      onClick={() => { setProfileOpen(false); }}
+                      onClick={() => { setProfileOpen(false); onEditProfile?.(); }}
                       className="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-white/5 transition cursor-pointer flex items-center gap-3"
                     >
                       <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

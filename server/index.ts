@@ -2580,7 +2580,7 @@ const distPath = path.join(__dirname, '..', 'dist');
 
 app.use(express.static(distPath));
 // SPA fallback — minden nem-API route az index.html-t kapja
-app.get('*', (req, res) => {
+app.get('/{*path}', (req, res) => {
   if (req.path.startsWith('/api')) {
     res.status(404).json({ error: 'API endpoint not found' });
     return;

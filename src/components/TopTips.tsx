@@ -11,8 +11,6 @@ interface Props {
 
 function pct(v: number) { return `${(v * 100).toFixed(1)}%`; }
 
-function genId() { return Math.random().toString(36).slice(2, 10); }
-
 function confColor(c: number) {
   if (c >= 0.75) return 'text-green';
   if (c >= 0.6) return 'text-yellow';
@@ -28,12 +26,6 @@ function leagueBadge(l: string) {
   return 'bg-slate-600/30 text-slate-400';
 }
 
-function categoryBadge(cat: string | undefined) {
-  if (cat === 'STRONG_BET') return { bg: 'bg-green text-white', label: 'STRONG BET' };
-  if (cat === 'BET') return { bg: 'bg-yellow text-dark-bg', label: 'BET' };
-  return { bg: 'bg-slate-600 text-slate-200', label: 'NO BET' };
-}
-
 function leagueAbbr(l: string) {
   if (l === 'GT Leagues') return 'GT';
   if (l === 'Esoccer Battle') return 'EB';
@@ -41,13 +33,6 @@ function leagueAbbr(l: string) {
   if (l === 'Esoccer H2H GG League') return 'H2H';
   if (l === 'Esports Volta') return 'VOLTA';
   return 'EV';
-}
-
-function medalIcon(idx: number) {
-  if (idx === 0) return '🥇';
-  if (idx === 1) return '🥈';
-  if (idx === 2) return '🥉';
-  return `#${idx + 1}`;
 }
 
 type SortMode = 'time' | 'probability';
@@ -73,7 +58,7 @@ interface CheckedMatch {
   trendType?: 'VALUE' | 'TREND';
 }
 
-export default function TopTips({ onAddMatch }: Props) {
+export default function TopTips({ onAddMatch: _onAddMatch }: Props) {
   const [data, setData] = useState<TopTipsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -297,7 +282,7 @@ export default function TopTips({ onAddMatch }: Props) {
                     matchId: validateM.matchId,
                     playerA: validateM.tip.playerA,
                     playerB: validateM.tip.playerB,
-                    league: validateM.tip.league || validateM.tip.liga || 'GT Leagues',
+                    league: validateM.tip.league || 'GT Leagues',
                     timestamp: validateM.timestamp,
                     betType: validateM.betType,
                     betLine: validateM.betLine,
@@ -386,28 +371,6 @@ export default function TopTips({ onAddMatch }: Props) {
     const id = setInterval(load, 60_000);
     return () => clearInterval(id);
   }, [autoRefresh, load]);
-
-  const addTip = (tip: TopTip) => {
-    const liga = tip.league === 'GT Leagues' ? 'GT Leagues' as const
-      : tip.league === 'eAdriatic League' ? 'eAdriaticLeague' as const
-      : 'Other' as const;
-    const percek = tip.league === 'GT Leagues' ? 12 : tip.league === 'eAdriatic League' ? 10 : tip.league === 'Esoccer Battle' ? 8 : 6;
-
-    const match: MatchInput = {
-      id: genId(), liga, percek, matchTime: tip.time, matchDate: tip.date,
-      piacTipus: liga === 'GT Leagues' ? 'Over/Under' : 'Win',
-      playerA: tip.playerA, playerB: tip.playerB,
-      oddsA: tip.oddsA ?? 1.85,
-      oddsB: tip.oddsB ?? 1.95,
-      gfA: 0, gaA: 0, gfB: 0, gaB: 0,
-      winRateA: tip.winEselyA, winRateB: tip.winEselyB,
-      formaA: 0.5, formaB: 0.5, h2hA: 0.5, h2hB: 0.5,
-      ouLine: tip.ouLine,
-      oddsOver: tip.oddsOver ?? 1.85,
-      oddsUnder: tip.oddsUnder ?? 1.95,
-    };
-    onAddMatch(match);
-  };
 
   const toggleGreenCheck = (matchId: string, tip: TopTip) => {
     setCheckedMatches(prev => {
@@ -889,19 +852,20 @@ export default function TopTips({ onAddMatch }: Props) {
 
                       {/* H2H meccs-előzmény – egymás elleni meccsek */}
                       {(tip.h2hMatchHistory?.length ?? 0) > 0 && (() => {
+                        const hist = tip.h2hMatchHistory!;
                         const now = new Date();
                         const dd = String(now.getDate()).padStart(2, '0');
                         const mm = String(now.getMonth() + 1).padStart(2, '0');
                         // Raw date: "MM/DD HH:MM" → today prefix: "MM/DD"
                         const todayPrefix = `${mm}/${dd}`;
-                        const todayCount = tip.h2hMatchHistory.filter(m => m.date.startsWith(todayPrefix)).length;
+                        const todayCount = hist.filter(m => m.date.startsWith(todayPrefix)).length;
 
                         return (
                           <div className="bg-dark-bg/40 border border-dark-border rounded-lg overflow-hidden mb-2">
                             {/* Fejléc */}
                             <div className="flex items-center justify-between px-2 py-1 border-b border-dark-border bg-dark-bg/60">
                               <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wide">
-                                Egymás elleni ({tip.h2hMatchHistory.length} meccs)
+                                Egymás elleni ({hist.length} meccs)
                               </span>
                               {todayCount > 0 && (
                                 <span className="text-[10px] font-semibold text-accent-light">Ma: {todayCount} meccs</span>
@@ -911,10 +875,10 @@ export default function TopTips({ onAddMatch }: Props) {
                             <div className="p-1">
                               {(() => {
                                 // Mai meccseket elválasztjuk a régebbiektől
-                                const todayMatches = tip.h2hMatchHistory.filter(m => m.date.startsWith(todayPrefix));
-                                const olderMatches = tip.h2hMatchHistory.filter(m => !m.date.startsWith(todayPrefix));
+                                const todayMatches = hist.filter(m => m.date.startsWith(todayPrefix));
+                                const olderMatches = hist.filter(m => !m.date.startsWith(todayPrefix));
 
-                                const renderRow = (m: typeof tip.h2hMatchHistory[0], i: number, isToday: boolean) => {
+                                const renderRow = (m: typeof hist[0], i: number, isToday: boolean) => {
                                   const totalGoals = m.goalsA + m.goalsB;
                                   // Raw: "MM/DD HH:MM" → "MM.DD HH:MM"
                                   const dateFmt = m.date.length >= 5

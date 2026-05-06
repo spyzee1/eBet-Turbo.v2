@@ -2992,6 +2992,9 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('[cloudbet-web] Live score poller inicializálva (5 perc múlva indul)');
   })();
 
+  // Lezárt meccsek score pollozása 60 másodpercenként
+  setInterval(pollCompletedMatchScores, 60 * 1000);
+
   // Napi takarítás: régi injektált rekordok eltávolítása éjfél körül
   setInterval(clearOldInjectedMatches, 60 * 60 * 1000); // óránként
 

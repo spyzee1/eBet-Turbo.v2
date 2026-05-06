@@ -429,6 +429,7 @@ export default function TopTips({ onAddMatch: _onAddMatch }: Props) {
           if (!alreadyInJournal) {
             journal.push(newMatch);
             localStorage.setItem(BETTING_JOURNAL_KEY, JSON.stringify(journal));
+            saveJournal(journal);
           }
         } catch (e) {
           console.error('Napló mentési hiba:', e);
@@ -477,6 +478,7 @@ export default function TopTips({ onAddMatch: _onAddMatch }: Props) {
           if (matchData) journal.push(matchData);
         }
         localStorage.setItem(BETTING_JOURNAL_KEY, JSON.stringify(journal));
+        saveJournal(journal);
         window.dispatchEvent(new Event('journal-updated'));
       } catch (e) {
         console.error('Journal update hiba:', e);

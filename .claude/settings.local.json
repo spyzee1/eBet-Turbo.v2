@@ -75,7 +75,10 @@
       "PowerShell(Start-Sleep 5; $r = Invoke-WebRequest -Uri \"http://localhost:3005/api/debug-live\" -UseBasicParsing -ErrorAction SilentlyContinue; if \\($r\\) { $r.Content | Select-String -Pattern \".\" | Select-Object -First 5 } else { \"Szerver még nem válaszol\" })",
       "PowerShell($p = Get-NetTCPConnection -LocalPort 3005 -State Listen -ErrorAction SilentlyContinue; if \\($p\\) { Stop-Process -Id $p.OwningProcess -Force }; Start-Sleep 1; Set-Location \"C:\\\\eSportBet\\\\eBet\\\\e-sport-bet-main\"; Start-Process -NoNewWindow -FilePath \"npx\" -ArgumentList \"tsx\",\"server/index.ts\"; Start-Sleep 5; $r = Invoke-WebRequest -Uri \"http://localhost:3005/api/live-scores\" -UseBasicParsing -ErrorAction SilentlyContinue; $r.Content | ConvertFrom-Json | Select-Object -First 3 | ConvertTo-Json)",
       "PowerShell($p = Get-NetTCPConnection -LocalPort 3005 -State Listen -ErrorAction SilentlyContinue; if \\($p\\) { Stop-Process -Id $p.OwningProcess -Force }; Start-Sleep 1; Set-Location \"C:\\\\eSportBet\\\\eBet\\\\e-sport-bet-main\"; Start-Process -NoNewWindow -FilePath \"npx\" -ArgumentList \"tsx\",\"server/index.ts\"; Start-Sleep 4; $r = Invoke-WebRequest -Uri \"http://localhost:3005/api/live-scores\" -UseBasicParsing -ErrorAction SilentlyContinue; \\($r.Content | ConvertFrom-Json\\).value | Select-Object playerA,playerB,scoreA,scoreB,minute,periodName | Select-Object -First 4 | ConvertTo-Json)",
-      "PowerShell(Start-Sleep 4; $r = Invoke-WebRequest -Uri \"http://localhost:3005/api/live-scores\" -UseBasicParsing -ErrorAction SilentlyContinue; if \\($r\\) { \\($r.Content | ConvertFrom-Json\\) | Select-Object playerA,playerB,scoreA,scoreB,minute,periodName | Select-Object -First 4 | ConvertTo-Json } else { \"nem válaszol\" })"
+      "PowerShell(Start-Sleep 4; $r = Invoke-WebRequest -Uri \"http://localhost:3005/api/live-scores\" -UseBasicParsing -ErrorAction SilentlyContinue; if \\($r\\) { \\($r.Content | ConvertFrom-Json\\) | Select-Object playerA,playerB,scoreA,scoreB,minute,periodName | Select-Object -First 4 | ConvertTo-Json } else { \"nem válaszol\" })",
+      "Bash(Get-ChildItem -Force)",
+      "Bash(Select-Object Name, Attributes)",
+      "Bash(node -e \"const p = require\\('./package.json'\\); console.log\\(JSON.stringify\\({scripts: p.scripts, engines: p.engines}, null, 2\\)\\)\")"
     ]
   }
 }

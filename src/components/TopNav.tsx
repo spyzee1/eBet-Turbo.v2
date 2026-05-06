@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import logo from '../assets/ebet.png';
 import DigitalClock from './DigitalClock';
 
-type View = 'dashboard' | 'topTips' | 'napiMerkezesek' | 'naplo' | 'upcoming' | 'newMatch' | 'playerProfile' | 'backtest' | 'history' | 'settings' | 'statistics' | 'segedlet';
+type View = 'dashboard' | 'topTips' | 'napiMerkezesek' | 'naplo' | 'upcoming' | 'newMatch' | 'playerProfile' | 'backtest' | 'history' | 'settings' | 'statistics' | 'segedlet' | 'admin';
 
 interface Props {
   current: View;
@@ -11,6 +11,7 @@ interface Props {
   onLogout?: () => void;
   onDeleteAccount?: () => void;
   onEditProfile?: () => void;
+  isAdmin?: boolean;
 }
 
 const NAV_ITEMS: { id: View; label: string }[] = [
@@ -25,7 +26,7 @@ function avatarLetter(email?: string) {
   return email ? email[0].toUpperCase() : '?';
 }
 
-export default function TopNav({ current, onChange, userEmail, onLogout, onDeleteAccount, onEditProfile }: Props) {
+export default function TopNav({ current, onChange, userEmail, onLogout, onDeleteAccount, onEditProfile, isAdmin }: Props) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -60,6 +61,18 @@ export default function TopNav({ current, onChange, userEmail, onLogout, onDelet
 
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-1 shrink-0">
+            {isAdmin && (
+              <button
+                onClick={() => onChange('admin')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition cursor-pointer ${
+                  current === 'admin'
+                    ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40'
+                    : 'text-slate-500 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                Admin
+              </button>
+            )}
             {NAV_ITEMS.map(item => (
               <button
                 key={item.id}

@@ -49,7 +49,7 @@ import {
   injectCompletedMatches, clearOldInjectedMatches, initCompletedMatchesFromDb, MsportMatchResult,
   scrapeMsportFixtures, clearFixtureCache, getMsportUpcomingSchedule,
 } from './msport-scraper.js';
-import { initDb, loadJournal, saveJournalDb, loadSettings as loadSettingsDb, saveSettings as saveSettingsDb, supabase } from './db.js';
+import { initDb, loadJournal, saveJournalDb, loadSettings as loadSettingsDb, saveSettings as saveSettingsDb, loadCheckedMatches, saveCheckedMatchesDb, getSubscription, upsertSubscription, revokeSubscription, supabase } from './db.js';
 import {
   getCloudbetOdds, getCloudbetOddsForMatch, getCloudbetSchedule,
   clearCloudbetCache, getCloudbetKeyStatus, testCloudbetApi,
@@ -2833,6 +2833,103 @@ app.post('/api/settings', async (req, res) => {
     await saveSettingsDb(userId ?? undefined, req.body);
     res.json({ ok: true });
   } catch { res.status(500).json({ ok: false }); }
+});
+
+// ── Checked matches endpoints ────────────────────────────────────────────────
+
+app.get('/api/checked-matches', async (req, res) => {
+  try {
+    const userId = await getUserId(req);
+    const entries = await loadCheckedMatches(userId ?? undefined);
+    res.json(entries);
+  } catch { res.json([]); }
+});
+
+app.post('/api/checked-matches', async (req, res) => {
+  try {
+    const userId = await getUserId(req);
+    await saveCheckedMatchesDb(userId ?? undefined, req.body);
+    res.json({ ok: true });
+  } catch { res.status(500).json({ ok: false }); }
+});
+
+// ── Subscription endpoints ────────────────────────────────────────────────────
+
+app.get('/api/subscription', async (req, res) => {
+  const userId = await getUserId(req);
+  if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+  const sub = await getSubscription(userId);
+  // Auto-create 30-day trial on first login
+  if (!sub) {
+    await upsertSubscription(userId, 30);
+    const created = await getSubscription(userId);
+    res.json(created ?? { plan: 'pro', expires_at: new Date(Date.now() + 30 * 86400_000).toISOString() });
+    return;
+  }
+  res.json(sub);
+});
+
+// ── Admin endpoints ───────────────────────────────────────────────────────────
+
+function isAdminEmail(email: string): boolean {
+  const list = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim().toLowerCase());
+  return list.includes(email.toLowerCase());
+}
+
+async function requireAdmin(req: express.Request, res: express.Response): Promise<string | null> {
+  const sb = supabase;
+  if (!sb) { res.status(503).json({ error: 'Supabase not configured' }); return null; }
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) { res.status(401).json({ error: 'Unauthorized' }); return null; }
+  const { data: { user }, error } = await sb.auth.getUser(token);
+  if (error || !user?.email || !isAdminEmail(user.email)) {
+    res.status(403).json({ error: 'Forbidden' }); return null;
+  }
+  return user.id;
+}
+
+app.get('/api/admin/status', async (req, res) => {
+  const sb = supabase;
+  if (!sb) { res.json({ isAdmin: false }); return; }
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) { res.json({ isAdmin: false }); return; }
+  const { data: { user } } = await sb.auth.getUser(token);
+  res.json({ isAdmin: !!user?.email && isAdminEmail(user.email) });
+});
+
+app.get('/api/admin/users', async (req, res) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+  const sb = supabase!;
+  try {
+    const { data: { users }, error } = await sb.auth.admin.listUsers({ perPage: 1000 });
+    if (error) throw error;
+    const { data: subs } = await sb.from('subscriptions').select('user_id,plan,expires_at');
+    const subMap = new Map((subs ?? []).map((s: any) => [s.user_id, s]));
+    const result = users.map(u => ({
+      id: u.id,
+      email: u.email,
+      created_at: u.created_at,
+      email_confirmed: !!u.email_confirmed_at,
+      subscription: subMap.get(u.id) ?? null,
+    }));
+    res.json(result);
+  } catch (e: any) { res.status(500).json({ error: e?.message }); }
+});
+
+app.post('/api/admin/users/:userId/extend', async (req, res) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+  const { days = 30 } = req.body;
+  await upsertSubscription(req.params.userId, Number(days));
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/users/:userId/revoke', async (req, res) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+  await revokeSubscription(req.params.userId);
+  res.json({ ok: true });
 });
 
 // GET /api/h2h-quick/:playerA/:playerB?league=...

@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import TopNav from './components/TopNav';
 import LoginPage from './components/LoginPage';
 import ChangePasswordModal from './components/ChangePasswordModal';
+import SetNewPasswordModal from './components/SetNewPasswordModal';
+import SubscriptionExpired from './components/SubscriptionExpired';
+import AdminPanel from './components/AdminPanel';
 import Dashboard from './components/Dashboard';
 import Upcoming from './components/Upcoming';
 import MatchForm from './components/MatchForm';
@@ -23,32 +26,43 @@ import {
   loadHistory, saveHistory, addToHistory,
   HistoryEntry,
 } from './model/store';
-import { autoCheckResults, resolveResults, fetchJournal, saveJournal, fetchRemoteSettings, saveRemoteSettings } from './api';
+import { autoCheckResults, resolveResults, fetchJournal, saveJournal, fetchRemoteSettings, saveRemoteSettings, fetchSubscription, fetchAdminStatus, fetchCheckedMatches, Subscription } from './api';
+import { useRealtimeSync, debouncedSaveJournal, debouncedSaveChecked } from './hooks/useRealtimeSync';
 import { getSupabaseClient } from './lib/supabase';
 
-type View = 'dashboard' | 'topTips' | 'napiMerkezesek' | 'naplo' | 'upcoming' | 'newMatch' | 'playerProfile' | 'backtest' | 'history' | 'settings' | 'statistics' | 'segedlet';
+type View = 'dashboard' | 'topTips' | 'napiMerkezesek' | 'naplo' | 'upcoming' | 'newMatch' | 'playerProfile' | 'backtest' | 'history' | 'settings' | 'statistics' | 'segedlet' | 'admin';
 
 function App() {
   const [authed, setAuthed] = useState<boolean | null>(null); // null = checking
   const [userEmail, setUserEmail] = useState<string | undefined>();
   const [emailConfirmed, setEmailConfirmed] = useState(true);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(false);
+  const [subscription, setSubscription] = useState<Subscription | null | 'loading'>('loading');
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     getSupabaseClient().then(async sb => {
-      if (!sb) { setAuthed(true); return; }
+      if (!sb) { setAuthed(true); setSubscription(null); return; }
       const { data: { session } } = await sb.auth.getSession();
       setAuthed(!!session);
       setUserEmail(session?.user?.email);
       setEmailConfirmed(!!session?.user?.email_confirmed_at);
-      sb.auth.onAuthStateChange((_ev, s) => {
+      sb.auth.onAuthStateChange((ev, s) => {
+        if (ev === 'PASSWORD_RECOVERY') { setShowRecovery(true); return; }
         setAuthed(!!s);
         setUserEmail(s?.user?.email);
         setEmailConfirmed(!!s?.user?.email_confirmed_at);
       });
     });
   }, []);
+
+  useEffect(() => {
+    if (authed !== true) { setSubscription(null); setIsAdmin(false); return; }
+    fetchSubscription().then(setSubscription);
+    fetchAdminStatus().then(setIsAdmin);
+  }, [authed]);
 
   const handleResendConfirmation = async () => {
     if (resendCooldown || !userEmail) return;
@@ -64,6 +78,8 @@ function App() {
     if (sb) await sb.auth.signOut();
     setAuthed(false);
     setUserEmail(undefined);
+    setSubscription(null);
+    setIsAdmin(false);
   };
 
   const handleDeleteAccount = async () => {
@@ -85,6 +101,48 @@ function App() {
   const [matches, setMatches] = useState<MatchInput[]>(loadMatches);
   const [history, setHistory] = useState<HistoryEntry[]>(loadHistory);
   const settingsSynced = useRef(false);
+
+  // Realtime sync (journals + checked_matches)
+  useRealtimeSync(authed === true);
+
+  // Startup: load checked matches from server, merge with localStorage
+  useEffect(() => {
+    if (authed !== true) return;
+    fetchCheckedMatches().then(remote => {
+      if (!remote.length) return;
+      const CHECKED_KEY = 'checked_green_matches';
+      const local: any[] = (() => { try { return JSON.parse(localStorage.getItem(CHECKED_KEY) || '[]'); } catch { return []; } })();
+      const merged = new Map<string, any>();
+      for (const e of local) if (e?.matchId) merged.set(e.matchId, e);
+      for (const e of remote) if (e?.matchId) merged.set(e.matchId, e);
+      localStorage.setItem(CHECKED_KEY, JSON.stringify(Array.from(merged.values())));
+      window.dispatchEvent(new Event('checked-matches-updated'));
+    });
+  }, [authed]);
+
+  // Save checked matches to server whenever they change
+  useEffect(() => {
+    if (authed !== true) return;
+    const CHECKED_KEY = 'checked_green_matches';
+    const handler = () => {
+      const entries: any[] = (() => { try { return JSON.parse(localStorage.getItem(CHECKED_KEY) || '[]'); } catch { return []; } })();
+      debouncedSaveChecked(entries);
+    };
+    window.addEventListener('checked-matches-updated', handler);
+    return () => window.removeEventListener('checked-matches-updated', handler);
+  }, [authed]);
+
+  // Save journal to server whenever it changes
+  useEffect(() => {
+    if (authed !== true) return;
+    const JOURNAL_KEY = 'betting_journal';
+    const handler = () => {
+      const entries: any[] = (() => { try { return JSON.parse(localStorage.getItem(JOURNAL_KEY) || '[]'); } catch { return []; } })();
+      debouncedSaveJournal(entries);
+    };
+    window.addEventListener('journal-updated', handler);
+    return () => window.removeEventListener('journal-updated', handler);
+  }, [authed]);
 
   const results: MatchResult[] = matches.map(m => calculateMatch(m, settings));
 
@@ -282,9 +340,23 @@ function App() {
     return <LoginPage onLogin={() => setAuthed(true)} />;
   }
 
+  // Still loading subscription
+  if (subscription === 'loading') {
+    return (
+      <div className="min-h-screen bg-dark-bg flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Subscription expired
+  if (subscription && new Date(subscription.expires_at) < new Date()) {
+    return <SubscriptionExpired expiresAt={subscription.expires_at} onLogout={handleLogout} />;
+  }
+
   return (
     <div className="min-h-screen bg-dark-bg flex flex-col">
-      <TopNav current={view} onChange={setView} userEmail={userEmail} onLogout={handleLogout} onDeleteAccount={handleDeleteAccount} onEditProfile={() => setShowPasswordModal(true)} />
+      <TopNav current={view} onChange={setView} userEmail={userEmail} onLogout={handleLogout} onDeleteAccount={handleDeleteAccount} onEditProfile={() => setShowPasswordModal(true)} isAdmin={isAdmin} />
 
       {!emailConfirmed && (
         <div className="bg-yellow-500/10 border-b border-yellow-500/30 px-4 py-3 flex items-center justify-between gap-4">
@@ -307,6 +379,9 @@ function App() {
       {showPasswordModal && userEmail && (
         <ChangePasswordModal email={userEmail} onClose={() => setShowPasswordModal(false)} />
       )}
+      {showRecovery && (
+        <SetNewPasswordModal onClose={() => setShowRecovery(false)} />
+      )}
 
       <main className="flex-1">
         <div className="max-w-screen-2xl mx-auto p-4 lg:p-6">
@@ -322,6 +397,7 @@ function App() {
           {view === 'backtest' && <Backtest />}
           {view === 'history' && <History history={history} onUpdateOutcome={updateOutcome} onClear={clearHistory} />}
           {view === 'settings' && <SettingsPanel settings={settings} onChange={setSettings} />}
+          {view === 'admin' && isAdmin && <AdminPanel />}
         </div>
       </main>
       <ToastContainer />

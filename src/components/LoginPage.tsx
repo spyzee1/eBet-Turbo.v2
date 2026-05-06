@@ -6,7 +6,7 @@ interface Props {
   onLogin: () => void;
 }
 
-type Mode = 'login' | 'register' | 'payment';
+type Mode = 'login' | 'register' | 'payment' | 'forgot';
 
 function formatCardNumber(v: string) {
   return v.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
@@ -81,6 +81,19 @@ export default function LoginPage({ onLogin }: Props) {
     }
   };
 
+  const handleForgot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(''); setLoading(true);
+    try {
+      const sb = await getSupabaseClient();
+      if (!sb) { setError('Supabase nincs konfigurálva.'); return; }
+      const siteUrl = window.location.origin;
+      await sb.auth.resetPasswordForEmail(email, { redirectTo: `${siteUrl}/` });
+      setInfo('Jelszó-visszaállító e-mail elküldve! Ellenőrizd a postaládádat.');
+    } catch { setError('Ismeretlen hiba történt.'); }
+    finally { setLoading(false); }
+  };
+
   const switchMode = (m: 'login' | 'register') => {
     setMode(m); setError(''); setInfo('');
   };
@@ -94,8 +107,34 @@ export default function LoginPage({ onLogin }: Props) {
 
         <div className="bg-dark-card border border-dark-border rounded-2xl p-8 shadow-xl">
 
+          {/* ── Forgot password ── */}
+          {mode === 'forgot' && (
+            <>
+              <button onClick={() => { setMode('login'); setError(''); setInfo(''); }}
+                className="flex items-center gap-1 text-slate-400 hover:text-white text-sm mb-5 transition cursor-pointer">
+                ← Vissza
+              </button>
+              <h1 className="text-white text-xl font-semibold mb-2 text-center">Elfelejtett jelszó</h1>
+              <p className="text-slate-400 text-sm text-center mb-6">Add meg az e-mail címedet és küldünk egy visszaállító linket.</p>
+              <form onSubmit={handleForgot} className="space-y-4">
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">E-mail</label>
+                  <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
+                    className="w-full px-4 py-2.5 rounded-lg bg-dark-bg border border-dark-border text-white placeholder-slate-600 focus:outline-none focus:border-orange-500/60 transition"
+                    placeholder="nev@email.com" />
+                </div>
+                {error && <p className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
+                {info && <p className="text-green-400 text-sm bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2">{info}</p>}
+                <button type="submit" disabled={loading || !!info}
+                  className="w-full py-2.5 rounded-lg bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white font-semibold transition cursor-pointer">
+                  {loading ? 'Küldés...' : 'Link küldése'}
+                </button>
+              </form>
+            </>
+          )}
+
           {/* ── Login / Register form ── */}
-          {mode !== 'payment' && (
+          {mode !== 'payment' && mode !== 'forgot' && (
             <>
               <h1 className="text-white text-xl font-semibold mb-6 text-center">
                 {mode === 'login' ? 'Bejelentkezés' : 'Regisztráció'}
@@ -145,13 +184,19 @@ export default function LoginPage({ onLogin }: Props) {
 
               <p className="text-center text-slate-500 text-sm mt-6">
                 {mode === 'login' ? 'Nincs még fiókod?' : 'Már van fiókod?'}{' '}
-                <button
-                  onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
-                  className="text-orange-400 hover:text-orange-300 transition cursor-pointer"
-                >
+                <button onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
+                  className="text-orange-400 hover:text-orange-300 transition cursor-pointer">
                   {mode === 'login' ? 'Regisztrálj' : 'Jelentkezz be'}
                 </button>
               </p>
+              {mode === 'login' && (
+                <p className="text-center mt-2">
+                  <button onClick={() => { setMode('forgot'); setError(''); setInfo(''); }}
+                    className="text-slate-500 hover:text-slate-400 text-sm transition cursor-pointer">
+                    Elfelejtett jelszó?
+                  </button>
+                </p>
+              )}
             </>
           )}
 

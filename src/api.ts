@@ -431,6 +431,82 @@ export async function resolveResults(matches: ResolveMatch[]): Promise<ResolveRe
   } catch { return matches.map(m => ({ matchId: m.matchId, pending: true })); }
 }
 
+export interface Subscription { plan: string; expires_at: string; }
+
+export async function fetchCheckedMatches(): Promise<any[]> {
+  try {
+    const token = await getAccessToken();
+    if (!token) return [];
+    const res = await fetch(`${API_BASE}/checked-matches`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return [];
+    return res.json();
+  } catch { return []; }
+}
+
+export async function saveCheckedMatches(entries: any[]): Promise<void> {
+  try {
+    const token = await getAccessToken();
+    if (!token) return;
+    await fetch(`${API_BASE}/checked-matches`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(entries),
+    });
+  } catch { /* silent */ }
+}
+
+export async function fetchSubscription(): Promise<Subscription | null> {
+  try {
+    const token = await getAccessToken();
+    if (!token) return null;
+    const res = await fetch(`${API_BASE}/subscription`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return null;
+    return res.json();
+  } catch { return null; }
+}
+
+export async function fetchAdminStatus(): Promise<boolean> {
+  try {
+    const token = await getAccessToken();
+    if (!token) return false;
+    const res = await fetch(`${API_BASE}/admin/status`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return false;
+    const d = await res.json();
+    return !!d.isAdmin;
+  } catch { return false; }
+}
+
+export interface AdminUser {
+  id: string; email: string; created_at: string; email_confirmed: boolean;
+  subscription: { plan: string; expires_at: string } | null;
+}
+
+export async function fetchAdminUsers(): Promise<AdminUser[]> {
+  try {
+    const token = await getAccessToken();
+    if (!token) return [];
+    const res = await fetch(`${API_BASE}/admin/users`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return [];
+    return res.json();
+  } catch { return []; }
+}
+
+export async function adminExtend(userId: string, days = 30): Promise<void> {
+  const token = await getAccessToken();
+  if (!token) return;
+  await fetch(`${API_BASE}/admin/users/${userId}/extend`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ days }),
+  });
+}
+
+export async function adminRevoke(userId: string): Promise<void> {
+  const token = await getAccessToken();
+  if (!token) return;
+  await fetch(`${API_BASE}/admin/users/${userId}/revoke`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+}
+
 export async function fetchRemoteSettings(): Promise<Record<string, any> | null> {
   try {
     const token = await getAccessToken();

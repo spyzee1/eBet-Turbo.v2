@@ -43,3 +43,26 @@ CREATE TABLE IF NOT EXISTS user_settings (
 );
 ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "users_own_settings" ON user_settings FOR ALL USING (auth.uid() = user_id);
+
+-- 5. Subscriptions
+CREATE TABLE IF NOT EXISTS subscriptions (
+  user_id    UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  plan       TEXT NOT NULL DEFAULT 'pro',
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "users_read_own_sub" ON subscriptions FOR SELECT USING (auth.uid() = user_id);
+
+-- 6. Per-user checked matches (zöld pipák)
+CREATE TABLE IF NOT EXISTS user_checked_matches (
+  user_id    UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  entries    JSONB NOT NULL DEFAULT '[]',
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE user_checked_matches ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "users_own_checked" ON user_checked_matches FOR ALL USING (auth.uid() = user_id);
+
+-- Realtime engedélyezése a journals és user_checked_matches táblákhoz
+ALTER PUBLICATION supabase_realtime ADD TABLE journals;
+ALTER PUBLICATION supabase_realtime ADD TABLE user_checked_matches;

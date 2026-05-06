@@ -2992,11 +2992,28 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log('[cloudbet-web] Live score poller inicializálva (5 perc múlva indul)');
   })();
 
-  // Lezárt meccsek score pollozása 60 másodpercenként
+  // Lezárt meccsek score pollozása 60 másodpercenként (dailyMatchMap alapján)
   setInterval(pollCompletedMatchScores, 60 * 1000);
 
-  // Napi takarítás: régi injektált rekordok eltávolítása éjfél körül
-  setInterval(clearOldInjectedMatches, 60 * 60 * 1000); // óránként
+  // Fixture-alapú szinkron: msport fixtures API → Supabase (15 percenként)
+  // Ez a megbízható forrás — nem függ a dailyMatchMap-től
+  const syncFixtures = async () => {
+    try {
+      clearFixtureCache(); // friss adatot akarunk
+      const fixtures = await scrapeMsportFixtures();
+      if (fixtures.length > 0) {
+        const added = await injectCompletedMatches(fixtures);
+        if (added > 0) console.log(`[accum-sync] +${added} meccs szinkronizálva fixtures API-ból`);
+      }
+    } catch (e) {
+      console.error('[accum-sync] hiba:', e);
+    }
+  };
+  setTimeout(syncFixtures, 2 * 60 * 1000);          // 2 perc után első futás
+  setInterval(syncFixtures, 15 * 60 * 1000);         // majd 15 percenként
+
+  // Napi takarítás: régi injektált rekordok eltávolítása óránként
+  setInterval(clearOldInjectedMatches, 60 * 60 * 1000);
 
   // Supabase: lezárt meccsek betöltése restart után
   initCompletedMatchesFromDb().catch(e => console.error('[startup] initFromDb hiba:', e));

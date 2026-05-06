@@ -12,6 +12,7 @@
     "preview": "tsx server/index.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.105.3",
     "axios": "^1.15.1",
     "cheerio": "^1.2.0",
     "cors": "^2.8.6",

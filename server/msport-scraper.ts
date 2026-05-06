@@ -6,6 +6,7 @@
 
 import axios from 'axios';
 import * as cheerio from 'cheerio';
+import { supabase } from './db.js';
 
 // ── Cookie manager ────────────────────────────────────────────────────────────
 // Az msport.com API JavaScript-által beállított session tokent igényel (bizCode 19000 nélkül).
@@ -710,36 +711,102 @@ const RESULTS_TTL = 3 * 60 * 1000;
 const _injectedCompleted: MsportMatchResult[] = [];
 
 /**
- * Injektál lezárt meccseket az in-memory tárolóba.
+ * Injektál lezárt meccseket az in-memory tárolóba és Supabase-be.
  * Hívja: index.ts pollCompletedMatchScores() 60 mp-enként.
  * @returns hány új meccs került be (deduplikálva eventId alapján)
  */
-export function injectCompletedMatches(matches: MsportMatchResult[]): number {
+export async function injectCompletedMatches(matches: MsportMatchResult[]): Promise<number> {
   const seen = new Set(_injectedCompleted.map(m => m.eventId));
-  let added = 0;
+  const newMatches: MsportMatchResult[] = [];
   for (const m of matches) {
     if (!seen.has(m.eventId)) {
       _injectedCompleted.push(m);
       seen.add(m.eventId);
-      added++;
+      newMatches.push(m);
     }
   }
-  if (added > 0) {
-    console.log(`[msport-accum] +${added} completed match(es) injected (total: ${_injectedCompleted.length})`);
+  if (newMatches.length > 0) {
+    console.log(`[msport-accum] +${newMatches.length} completed match(es) injected (total: ${_injectedCompleted.length})`);
+    if (supabase) {
+      try {
+        await supabase.from('completed_matches').upsert(
+          newMatches.map(m => ({
+            event_id:   m.eventId,
+            player_a:   m.playerA,
+            player_b:   m.playerB,
+            team_a:     m.teamA,
+            team_b:     m.teamB,
+            score_a:    m.scoreA,
+            score_b:    m.scoreB,
+            start_time: m.startTime,
+            league:     m.league,
+            date:       m.date,
+          })),
+          { onConflict: 'event_id' }
+        );
+      } catch (e) {
+        console.error('[msport-accum] Supabase upsert hiba:', e);
+      }
+    }
   }
-  return added;
+  return newMatches.length;
+}
+
+/**
+ * Betölti a lezárt meccseket Supabase-ből az in-memory tárolóba (szerver induláskor).
+ */
+export async function initCompletedMatchesFromDb(): Promise<void> {
+  if (!supabase) return;
+  try {
+    const cutoff = Date.now() - 3 * 24 * 3600_000;
+    const { data, error } = await supabase
+      .from('completed_matches')
+      .select('*')
+      .gt('start_time', cutoff);
+    if (error) throw error;
+    if (!data || data.length === 0) return;
+    const seen = new Set(_injectedCompleted.map(m => m.eventId));
+    let loaded = 0;
+    for (const r of data) {
+      if (!seen.has(r.event_id)) {
+        _injectedCompleted.push({
+          eventId:   r.event_id,
+          playerA:   r.player_a,
+          playerB:   r.player_b,
+          teamA:     r.team_a ?? '',
+          teamB:     r.team_b ?? '',
+          scoreA:    r.score_a,
+          scoreB:    r.score_b,
+          startTime: r.start_time,
+          league:    r.league,
+          date:      r.date,
+        });
+        seen.add(r.event_id);
+        loaded++;
+      }
+    }
+    console.log(`[msport-accum] ✅ ${loaded} lezárt meccs betöltve Supabase-ből`);
+  } catch (e) {
+    console.error('[msport-accum] initFromDb hiba:', e);
+  }
 }
 
 /** Napi tisztítás: régi napok rekordjainak eltávolítása (Budapest UTC+2 dátum szerint) */
-export function clearOldInjectedMatches(): void {
-  const now = Date.now();
-  const yesterdayMs = now - 3 * 24 * 60 * 60 * 1000; // 3 napnál régebbiek (volt: 30 óra)
+export async function clearOldInjectedMatches(): Promise<void> {
+  const cutoff = Date.now() - 3 * 24 * 60 * 60 * 1000;
   const before = _injectedCompleted.length;
   _injectedCompleted.splice(0, _injectedCompleted.length,
-    ..._injectedCompleted.filter(m => m.startTime >= yesterdayMs)
+    ..._injectedCompleted.filter(m => m.startTime >= cutoff)
   );
   const removed = before - _injectedCompleted.length;
   if (removed > 0) console.log(`[msport-accum] ${removed} régi rekord törölve, ${_injectedCompleted.length} maradt`);
+  if (supabase) {
+    try {
+      await supabase.from('completed_matches').delete().lt('start_time', cutoff);
+    } catch (e) {
+      console.error('[msport-accum] Supabase cleanup hiba:', e);
+    }
+  }
 }
 
 function parseResultEvents(data: any, league: string): MsportMatchResult[] {

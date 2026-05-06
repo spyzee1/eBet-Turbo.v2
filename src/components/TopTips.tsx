@@ -643,10 +643,23 @@ export default function TopTips({ onAddMatch: _onAddMatch }: Props) {
 
           if (tips.length === 0) return <p className="text-slate-400 text-sm">Nincs találat.</p>;
 
+          const today = (() => {
+            const n = new Date();
+            return `${String(n.getMonth()+1).padStart(2,'0')}/${String(n.getDate()).padStart(2,'0')}`;
+          })();
+          const tomorrow = (() => {
+            const n = new Date(Date.now() + 86400000);
+            return `${String(n.getMonth()+1).padStart(2,'0')}/${String(n.getDate()).padStart(2,'0')}`;
+          })();
+          const dateLabel = (d: string) =>
+            d === today ? 'Ma' : d === tomorrow ? 'Holnap' : d.replace('/', '.');
+
           return (
             <div className="grid gap-4">
               {tips.map((tip, idx) => {
                 const matchId = getMatchId(tip);
+                const prevDate = idx > 0 ? tips[idx - 1].date : null;
+                const showDateSep = tip.date && tip.date !== prevDate;
                 const isGreen = isGreenChecked(matchId);
                 const isRed = checkedRed.has(matchId);
                 const isChecked = isGreen || isRed;
@@ -680,8 +693,17 @@ export default function TopTips({ onAddMatch: _onAddMatch }: Props) {
                     : tip.valueBet;
 
                 return (
+                  <div key={idx}>
+                    {showDateSep && (
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="flex-1 h-px bg-dark-border" />
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest px-2">
+                          {dateLabel(tip.date)}
+                        </span>
+                        <div className="flex-1 h-px bg-dark-border" />
+                      </div>
+                    )}
                   <div
-                    key={idx}
                     className={`bg-dark-card border-2 ${cardBorder} rounded-xl overflow-hidden transition-all ${cardOpacity} ${cardGlow} min-w-[900px] w-full flex flex-col`}
                   >
                     <div className="flex items-center gap-4 px-5 py-3 bg-dark-bg/40 border-b border-dark-border">
@@ -945,6 +967,7 @@ export default function TopTips({ onAddMatch: _onAddMatch }: Props) {
                         </div>
                       )}
                     </div>
+                  </div>
                   </div>
                 );
               })}

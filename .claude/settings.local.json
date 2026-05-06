@@ -78,7 +78,9 @@
       "PowerShell(Start-Sleep 4; $r = Invoke-WebRequest -Uri \"http://localhost:3005/api/live-scores\" -UseBasicParsing -ErrorAction SilentlyContinue; if \\($r\\) { \\($r.Content | ConvertFrom-Json\\) | Select-Object playerA,playerB,scoreA,scoreB,minute,periodName | Select-Object -First 4 | ConvertTo-Json } else { \"nem válaszol\" })",
       "Bash(Get-ChildItem -Force)",
       "Bash(Select-Object Name, Attributes)",
-      "Bash(node -e \"const p = require\\('./package.json'\\); console.log\\(JSON.stringify\\({scripts: p.scripts, engines: p.engines}, null, 2\\)\\)\")"
+      "Bash(node -e \"const p = require\\('./package.json'\\); console.log\\(JSON.stringify\\({scripts: p.scripts, engines: p.engines}, null, 2\\)\\)\")",
+      "Bash(node -e \"const p = require\\('./package.json'\\); console.log\\(p.dependencies['@supabase/supabase-js'] || 'nincs telepítve'\\)\")",
+      "Bash(npm install *)"
     ]
   }
 }

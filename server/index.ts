@@ -55,9 +55,10 @@ import {
   getMsportOdds, getMsportOddsForMatch, getMsportSchedule, getMsportRawDebug,
   setMsportCookie, getMsportCookieStatus, getMsportLiveScores,
   getMsportMatchResults, getMsportPlayerLastMatches, getMsportH2H,
-  injectCompletedMatches, clearOldInjectedMatches, MsportMatchResult,
+  injectCompletedMatches, clearOldInjectedMatches, initCompletedMatchesFromDb, MsportMatchResult,
   scrapeMsportFixtures, clearFixtureCache, getMsportUpcomingSchedule,
 } from './msport-scraper.js';
+import { loadJournal, saveJournalDb } from './db.js';
 import {
   getCloudbetOdds, getCloudbetOddsForMatch, getCloudbetSchedule,
   clearCloudbetCache, getCloudbetKeyStatus, testCloudbetApi,
@@ -2780,16 +2781,22 @@ import fs from 'fs';
 const JOURNAL_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), '../data/journal.json');
 if (!fs.existsSync(path.dirname(JOURNAL_FILE))) fs.mkdirSync(path.dirname(JOURNAL_FILE), { recursive: true });
 
-app.get('/api/journal', (_req, res) => {
+app.get('/api/journal', async (_req, res) => {
   try {
+    const dbEntries = await loadJournal();
+    if (dbEntries.length > 0) return res.json(dbEntries);
+    // Fallback: helyi fájl (Supabase nincs konfigurálva)
     if (!fs.existsSync(JOURNAL_FILE)) return res.json([]);
     res.json(JSON.parse(fs.readFileSync(JOURNAL_FILE, 'utf-8')));
   } catch { res.json([]); }
 });
 
-app.post('/api/journal', (req, res) => {
+app.post('/api/journal', async (req, res) => {
   try {
-    fs.writeFileSync(JOURNAL_FILE, JSON.stringify(req.body, null, 2));
+    // Supabase mentés
+    await saveJournalDb(req.body);
+    // Fájl backup (ha van data/ mappa)
+    try { fs.writeFileSync(JOURNAL_FILE, JSON.stringify(req.body, null, 2)); } catch { /* silent */ }
     res.json({ ok: true });
   } catch { res.status(500).json({ ok: false }); }
 });
@@ -2939,7 +2946,7 @@ async function pollCompletedMatchScores(): Promise<void> {
   }
 
   if (newResults.length > 0) {
-    injectCompletedMatches(newResults);
+    await injectCompletedMatches(newResults);
   }
 }
 
@@ -2996,4 +3003,7 @@ app.listen(3005, '0.0.0.0', () => {
 
   // Napi takarítás: régi injektált rekordok eltávolítása éjfél körül
   setInterval(clearOldInjectedMatches, 60 * 60 * 1000); // óránként
+
+  // Supabase: lezárt meccsek betöltése restart után
+  initCompletedMatchesFromDb().catch(e => console.error('[startup] initFromDb hiba:', e));
 });

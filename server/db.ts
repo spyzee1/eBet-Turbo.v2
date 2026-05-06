@@ -1,17 +1,18 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import ws from 'ws';
 
-const url = process.env.SUPABASE_URL ?? '';
-const key = process.env.SUPABASE_SERVICE_KEY ?? '';
+// Initialized lazily via initDb() so .env is loaded first by index.ts
+export let supabase: SupabaseClient | null = null;
 
-export const supabase = url && key
-  ? createClient(url, key, { realtime: { transport: ws } })
-  : null;
-
-if (supabase) {
+export function initDb(): void {
+  const url = process.env.SUPABASE_URL ?? '';
+  const key = process.env.SUPABASE_SERVICE_KEY ?? '';
+  if (!url || !key) {
+    console.warn('[db] ⚠️ SUPABASE_URL / SUPABASE_SERVICE_KEY hiányzik — fájl-alapú fallback aktív');
+    return;
+  }
+  supabase = createClient(url, key, { realtime: { transport: ws as any } });
   console.log('[db] Supabase kapcsolat inicializálva ✅');
-} else {
-  console.warn('[db] ⚠️ SUPABASE_URL / SUPABASE_SERVICE_KEY hiányzik — fájl-alapú fallback aktív');
 }
 
 // ── Journal ───────────────────────────────────────────────────────────────────
@@ -24,7 +25,7 @@ export async function loadJournal(): Promise<any[]> {
       .select('value')
       .eq('key', 'journal')
       .single();
-    if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
+    if (error && error.code !== 'PGRST116') throw error;
     return (data?.value as any[]) ?? [];
   } catch (e) {
     console.error('[db] loadJournal hiba:', e);

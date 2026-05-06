@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import TopNav from './components/TopNav';
+import LoginPage from './components/LoginPage';
 import Dashboard from './components/Dashboard';
 import Upcoming from './components/Upcoming';
 import MatchForm from './components/MatchForm';
@@ -22,10 +23,22 @@ import {
   HistoryEntry,
 } from './model/store';
 import { autoCheckResults, resolveResults, fetchJournal, saveJournal } from './api';
+import { getSupabaseClient } from './lib/supabase';
 
 type View = 'dashboard' | 'topTips' | 'napiMerkezesek' | 'naplo' | 'upcoming' | 'newMatch' | 'playerProfile' | 'backtest' | 'history' | 'settings' | 'statistics' | 'segedlet';
 
 function App() {
+  const [authed, setAuthed] = useState<boolean | null>(null); // null = checking
+
+  useEffect(() => {
+    getSupabaseClient().then(async sb => {
+      if (!sb) { setAuthed(true); return; } // no Supabase configured → open access
+      const { data: { session } } = await sb.auth.getSession();
+      setAuthed(!!session);
+      sb.auth.onAuthStateChange((_ev, s) => setAuthed(!!s));
+    });
+  }, []);
+
   const [view, setView] = useState<View>('topTips');
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [matches, setMatches] = useState<MatchInput[]>(loadMatches);
@@ -198,6 +211,18 @@ function App() {
   }, []);
 
   const clearHistory = useCallback(() => { setHistory([]); }, []);
+
+  if (authed === null) {
+    return (
+      <div className="min-h-screen bg-dark-bg flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!authed) {
+    return <LoginPage onLogin={() => setAuthed(true)} />;
+  }
 
   return (
     <div className="min-h-screen bg-dark-bg flex flex-col">

@@ -1,21 +1,12 @@
-// ── .env betöltés (dotenv nélkül) ────────────────────────────────────────────
-// Beolvassa a projekt gyökerében lévő .env fájlt és betölti a process.env-be.
-// Production (Render): ott a Dashboard env vars-ból töltődnek, ez ott nem fut.
-import { readFileSync } from 'fs';
+import { config as dotenvConfig } from 'dotenv';
 import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
-try {
-  const __d = dirname(fileURLToPath(import.meta.url));
-  const envPath = resolve(__d, '../.env');
-  const lines = readFileSync(envPath, 'utf-8').split('\n');
-  for (const line of lines) {
-    const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
-    if (m && !process.env[m[1]]) {
-      process.env[m[1]] = m[2].trim();
-    }
-  }
-  console.log('[env] .env betöltve ✅');
-} catch { /* .env nem található — production-ban OK */ }
+import { fileURLToPath as _fileURLToPath } from 'url';
+{
+  const __d = dirname(_fileURLToPath(import.meta.url));
+  const result = dotenvConfig({ path: resolve(__d, '../.env') });
+  if (!result.error) console.log('[env] .env betöltve ✅');
+}
+initDb();
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { getVegasOdds, getAllVegasOdds, clearVegasCache, getAllLiveScores, getRawLiveDebug } from './vegas-scraper.js';
@@ -58,7 +49,7 @@ import {
   injectCompletedMatches, clearOldInjectedMatches, initCompletedMatchesFromDb, MsportMatchResult,
   scrapeMsportFixtures, clearFixtureCache, getMsportUpcomingSchedule,
 } from './msport-scraper.js';
-import { loadJournal, saveJournalDb } from './db.js';
+import { initDb, loadJournal, saveJournalDb } from './db.js';
 import {
   getCloudbetOdds, getCloudbetOddsForMatch, getCloudbetSchedule,
   clearCloudbetCache, getCloudbetKeyStatus, testCloudbetApi,
@@ -482,6 +473,14 @@ async function getPlayerStats(playerName: string, league: string): Promise<Playe
 // Health check
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString(), node: process.version });
+});
+
+// Frontend config — exposes non-secret env vars to the React app at runtime
+app.get('/api/config', (_req, res) => {
+  res.json({
+    supabaseUrl: process.env.SUPABASE_URL ?? '',
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY ?? '',
+  });
 });
 
 app.post('/api/cache/clear', (_req, res) => {

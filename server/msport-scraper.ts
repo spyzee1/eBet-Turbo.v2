@@ -791,7 +791,8 @@ export async function initCompletedMatchesFromDb(): Promise<void> {
   }
 }
 
-/** Napi tisztítás: régi napok rekordjainak eltávolítása (Budapest UTC+2 dátum szerint) */
+// In-memory ringbuffer: csak a 3 napnál frissebb meccsek maradnak a process memóriájában.
+// A Supabase-ben minden rekord megmarad korlátlan ideig — hosszú távú elemzéshez / backteszthez.
 export async function clearOldInjectedMatches(): Promise<void> {
   const cutoff = Date.now() - 3 * 24 * 60 * 60 * 1000;
   const before = _injectedCompleted.length;
@@ -799,14 +800,7 @@ export async function clearOldInjectedMatches(): Promise<void> {
     ..._injectedCompleted.filter(m => m.startTime >= cutoff)
   );
   const removed = before - _injectedCompleted.length;
-  if (removed > 0) console.log(`[msport-accum] ${removed} régi rekord törölve, ${_injectedCompleted.length} maradt`);
-  if (supabase) {
-    try {
-      await supabase.from('completed_matches').delete().lt('start_time', cutoff);
-    } catch (e) {
-      console.error('[msport-accum] Supabase cleanup hiba:', e);
-    }
-  }
+  if (removed > 0) console.log(`[msport-accum] ${removed} régi rekord eltávolítva a memóriából, ${_injectedCompleted.length} maradt`);
 }
 
 function parseResultEvents(data: any, league: string): MsportMatchResult[] {

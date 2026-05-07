@@ -12,6 +12,7 @@ interface Props {
   onDeleteAccount?: () => void;
   onEditProfile?: () => void;
   isAdmin?: boolean;
+  subscription?: { plan: string; expires_at: string } | null;
 }
 
 const NAV_ITEMS: { id: View; label: string }[] = [
@@ -26,7 +27,12 @@ function avatarLetter(email?: string) {
   return email ? email[0].toUpperCase() : '?';
 }
 
-export default function TopNav({ current, onChange, userEmail, onLogout, onDeleteAccount, onEditProfile, isAdmin }: Props) {
+export default function TopNav({ current, onChange, userEmail, onLogout, onDeleteAccount, onEditProfile, isAdmin, subscription }: Props) {
+  const subActive = !!subscription && new Date(subscription.expires_at) > new Date();
+  const subPlanLabel = subscription?.plan === 'pro' ? 'eBet Pro' : subscription?.plan ?? '';
+  const subExpiresLabel = subscription
+    ? new Date(subscription.expires_at).toLocaleDateString('hu-HU', { year: 'numeric', month: '2-digit', day: '2-digit' })
+    : '';
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -107,15 +113,23 @@ export default function TopNav({ current, onChange, userEmail, onLogout, onDelet
                     <p className="text-sm text-white font-medium truncate">{userEmail}</p>
                   </div>
 
-                  {/* Subscription info (mock) */}
+                  {/* Subscription info */}
                   <div className="px-4 py-3 border-b border-dark-border">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-white font-medium">eBet Pro</p>
-                        <p className="text-xs text-slate-400">Havi előfizetés · 9,99 €</p>
+                    {subscription ? (
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm text-white font-medium">{subPlanLabel}</p>
+                          <p className="text-xs text-slate-400 truncate">Lejár: {subExpiresLabel}</p>
+                        </div>
+                        {subActive ? (
+                          <span className="shrink-0 text-xs bg-green-500/20 text-green-400 border border-green-500/30 rounded-full px-2 py-0.5">Aktív</span>
+                        ) : (
+                          <span className="shrink-0 text-xs bg-red-500/20 text-red-400 border border-red-500/30 rounded-full px-2 py-0.5">Lejárt</span>
+                        )}
                       </div>
-                      <span className="text-xs bg-green-500/20 text-green-400 border border-green-500/30 rounded-full px-2 py-0.5">Aktív</span>
-                    </div>
+                    ) : (
+                      <p className="text-xs text-slate-500">Nincs aktív előfizetés</p>
+                    )}
                   </div>
 
                   {/* Actions */}
@@ -128,16 +142,6 @@ export default function TopNav({ current, onChange, userEmail, onLogout, onDelet
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
                       </svg>
                       Profil szerkesztése
-                    </button>
-
-                    <button
-                      onClick={() => { setProfileOpen(false); }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-white/5 transition cursor-pointer flex items-center gap-3"
-                    >
-                      <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 21Z" />
-                      </svg>
-                      Előfizetés kezelése
                     </button>
 
                     <button

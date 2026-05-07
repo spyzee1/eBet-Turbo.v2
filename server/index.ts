@@ -2783,9 +2783,6 @@ app.post('/api/resolve-results', async (req, res) => {
 });
 
 // ============ JOURNAL PERSISTENCE ============
-import fs from 'fs';
-const JOURNAL_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), '../data/journal.json');
-if (!fs.existsSync(path.dirname(JOURNAL_FILE))) fs.mkdirSync(path.dirname(JOURNAL_FILE), { recursive: true });
 
 async function getUserId(req: express.Request): Promise<string | null> {
   const token = req.headers.authorization?.replace('Bearer ', '');
@@ -2800,21 +2797,16 @@ async function getUserId(req: express.Request): Promise<string | null> {
 app.get('/api/journal', async (req, res) => {
   try {
     const userId = await getUserId(req);
-    const dbEntries = await loadJournal(userId ?? undefined);
-    if (dbEntries.length > 0) return res.json(dbEntries);
-    if (!userId && fs.existsSync(JOURNAL_FILE))
-      return res.json(JSON.parse(fs.readFileSync(JOURNAL_FILE, 'utf-8')));
-    res.json([]);
+    if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+    res.json(await loadJournal(userId));
   } catch { res.json([]); }
 });
 
 app.post('/api/journal', async (req, res) => {
   try {
     const userId = await getUserId(req);
-    await saveJournalDb(userId ?? undefined, req.body);
-    if (!userId) {
-      try { fs.writeFileSync(JOURNAL_FILE, JSON.stringify(req.body, null, 2)); } catch { /* silent */ }
-    }
+    if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+    await saveJournalDb(userId, req.body);
     res.json({ ok: true });
   } catch { res.status(500).json({ ok: false }); }
 });
@@ -2822,7 +2814,8 @@ app.post('/api/journal', async (req, res) => {
 app.get('/api/settings', async (req, res) => {
   try {
     const userId = await getUserId(req);
-    const data = await loadSettingsDb(userId ?? undefined);
+    if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+    const data = await loadSettingsDb(userId);
     res.json(data ?? {});
   } catch { res.json({}); }
 });
@@ -2830,7 +2823,8 @@ app.get('/api/settings', async (req, res) => {
 app.post('/api/settings', async (req, res) => {
   try {
     const userId = await getUserId(req);
-    await saveSettingsDb(userId ?? undefined, req.body);
+    if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+    await saveSettingsDb(userId, req.body);
     res.json({ ok: true });
   } catch { res.status(500).json({ ok: false }); }
 });
@@ -2840,15 +2834,16 @@ app.post('/api/settings', async (req, res) => {
 app.get('/api/checked-matches', async (req, res) => {
   try {
     const userId = await getUserId(req);
-    const entries = await loadCheckedMatches(userId ?? undefined);
-    res.json(entries);
+    if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+    res.json(await loadCheckedMatches(userId));
   } catch { res.json([]); }
 });
 
 app.post('/api/checked-matches', async (req, res) => {
   try {
     const userId = await getUserId(req);
-    await saveCheckedMatchesDb(userId ?? undefined, req.body);
+    if (!userId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+    await saveCheckedMatchesDb(userId, req.body);
     res.json({ ok: true });
   } catch { res.status(500).json({ ok: false }); }
 });

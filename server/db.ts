@@ -101,7 +101,7 @@ export async function upsertSubscription(userId: string, days: number): Promise<
       : new Date();
     base.setDate(base.getDate() + days);
     await supabase.from('subscriptions')
-      .upsert({ user_id: userId, plan: 'pro', expires_at: base.toISOString() }, { onConflict: 'user_id' });
+      .upsert({ user_id: userId, plan: 'pro', expires_at: base.toISOString(), updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
   } catch (e) { console.error('[db] upsertSubscription hiba:', e); }
 }
 

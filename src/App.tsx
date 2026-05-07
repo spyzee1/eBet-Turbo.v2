@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import TopNav from './components/TopNav';
-import LoginPage from './components/LoginPage';
+import LandingPage from './components/LandingPage';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import SetNewPasswordModal from './components/SetNewPasswordModal';
 import SubscriptionExpired from './components/SubscriptionExpired';
@@ -92,8 +92,15 @@ function App() {
       });
       if (sb) await sb.auth.signOut();
     } catch { /* silent */ }
+    // Wipe per-user local state so a next user on the same device starts clean
+    try {
+      localStorage.removeItem('betting_journal');
+      localStorage.removeItem('checked_green_matches');
+    } catch { /* silent */ }
     setAuthed(false);
     setUserEmail(undefined);
+    setSubscription(null);
+    setIsAdmin(false);
   };
 
   const [view, setView] = useState<View>('topTips');
@@ -146,17 +153,16 @@ function App() {
 
   const results: MatchResult[] = matches.map(m => calculateMatch(m, settings));
 
-  // Startup: pull settings from server, server takes priority over localStorage
+  // Startup: pull settings from server, server takes priority over localStorage.
+  // The next [settings] effect picks up the merged value and persists it locally.
   useEffect(() => {
     if (authed !== true) return;
     fetchRemoteSettings().then(remote => {
       if (remote && Object.keys(remote).length > 0) {
         setSettings(s => ({ ...s, ...remote }));
-        saveSettings({ ...settings, ...remote });
       }
       settingsSynced.current = true;
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed]);
 
   useEffect(() => {
@@ -337,7 +343,7 @@ function App() {
   }
 
   if (!authed) {
-    return <LoginPage onLogin={() => setAuthed(true)} />;
+    return <LandingPage onLogin={() => setAuthed(true)} />;
   }
 
   // Still loading subscription
@@ -356,7 +362,16 @@ function App() {
 
   return (
     <div className="min-h-screen bg-dark-bg flex flex-col">
-      <TopNav current={view} onChange={setView} userEmail={userEmail} onLogout={handleLogout} onDeleteAccount={handleDeleteAccount} onEditProfile={() => setShowPasswordModal(true)} isAdmin={isAdmin} />
+      <TopNav
+        current={view}
+        onChange={setView}
+        userEmail={userEmail}
+        onLogout={handleLogout}
+        onDeleteAccount={handleDeleteAccount}
+        onEditProfile={() => setShowPasswordModal(true)}
+        isAdmin={isAdmin}
+        subscription={subscription}
+      />
 
       {!emailConfirmed && (
         <div className="bg-yellow-500/10 border-b border-yellow-500/30 px-4 py-3 flex items-center justify-between gap-4">
